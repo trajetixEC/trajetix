@@ -12,6 +12,7 @@ import {
   TrackingModule,
 } from "./shipping-modules";
 import { FinanceModule, StoreUsersModule } from "./admin-modules";
+import { CarrierConfigModal } from "./carrier-config-modal";
 import { ProfileModule } from "./profile-module";
 import { ReferralsModule } from "./referrals-module";
 import { TopbarWallet } from "./topbar-wallet";
@@ -96,6 +97,7 @@ type Section =
   | "Referidos"
   | "Configuración"
   | "Usuarios de tienda"
+  | "Transportadoras"
   | "Integraciones"
   | "Mi perfil";
 
@@ -133,6 +135,13 @@ const menu: {
     label: "Usuarios de tienda",
     icon: "♙",
     permissions: ["members:manage"],
+    group: "ADMINISTRACIÓN",
+    ownerOnly: true,
+  },
+  {
+    label: "Transportadoras",
+    icon: "🚛",
+    permissions: ["settings:read"],
     group: "ADMINISTRACIÓN",
     ownerOnly: true,
   },
@@ -202,6 +211,7 @@ export function DashboardApp({
     "product" | "customer" | "shipment" | "warehouse" | null
   >(null);
   const [adjustProduct, setAdjustProduct] = useState<Product | null>(null);
+  const [isCarriersModalOpen, setIsCarriersModalOpen] = useState(false);
 
   const loadOperationalData = useCallback(async () => {
     const tasks: Promise<void>[] = [];
@@ -580,6 +590,73 @@ export function DashboardApp({
             />
           )}
           {section === "Usuarios de tienda" && <StoreUsersModule />}
+          {section === "Transportadoras" && (
+            <div>
+              <div className="page-header">
+                <div>
+                  <span>CONFIGURACIÓN DE PLATAFORMA</span>
+                  <h1>Transportadoras de Envío</h1>
+                  <p>
+                    Administra las empresas de envío disponibles para cotizar en el flujo de "Nuevo envío", parámetros de fletes, recolección, márgenes de ganancia y mapa de localidades.
+                  </p>
+                </div>
+              </div>
+              <section className="panel" style={{ padding: "1.5rem" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: "1.25rem" }}>
+                  <div className="shipping-card" style={{ border: "1px solid var(--border)", borderRadius: "10px", padding: "1.25rem", background: "var(--card-bg)" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
+                      <span className="zone-tag local" style={{ fontSize: "0.8rem", padding: "4px 8px" }}>LAAR COURIER</span>
+                      <span style={{ color: "#10b981", fontWeight: 600, fontSize: "0.85rem" }}>🟢 Configurada</span>
+                    </div>
+                    <h3 style={{ margin: "0 0 0.5rem 0" }}>LAAR Courier Express</h3>
+                    <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginBottom: "1rem" }}>
+                      Servicios de courier nacional, recaudo COD, etiquetado PDF y rastreo en tiempo real (Ecuador).
+                    </p>
+                    <button
+                      type="button"
+                      className="primary-button"
+                      style={{ width: "100%", justifyContent: "center" }}
+                      onClick={() => setIsCarriersModalOpen(true)}
+                    >
+                      ⚙ Configurar Parámetros & 4 Tabs
+                    </button>
+                  </div>
+
+                  <div className="shipping-card" style={{ border: "1px dashed var(--border)", borderRadius: "10px", padding: "1.25rem", background: "var(--card-bg)", opacity: 0.7 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
+                      <span className="zone-tag principal" style={{ fontSize: "0.8rem", padding: "4px 8px" }}>SERVIENTREGA</span>
+                      <span style={{ color: "var(--text-muted)", fontSize: "0.85rem" }}>⚪ Próximamente</span>
+                    </div>
+                    <h3 style={{ margin: "0 0 0.5rem 0" }}>Servientrega Ecuador</h3>
+                    <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginBottom: "1rem" }}>
+                      Integración canónica de la API de Servientrega para logística nacional.
+                    </p>
+                    <button type="button" className="secondary-button" disabled style={{ width: "100%", justifyContent: "center" }}>
+                      🔒 Próxima fase
+                    </button>
+                  </div>
+
+                  <div className="shipping-card" style={{ border: "1px dashed var(--border)", borderRadius: "10px", padding: "1.25rem", background: "var(--card-bg)", opacity: 0.7 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
+                      <span className="zone-tag especial" style={{ fontSize: "0.8rem", padding: "4px 8px" }}>URBANO</span>
+                      <span style={{ color: "var(--text-muted)", fontSize: "0.85rem" }}>⚪ Próximamente</span>
+                    </div>
+                    <h3 style={{ margin: "0 0 0.5rem 0" }}>Urbano Express</h3>
+                    <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginBottom: "1rem" }}>
+                      Envíos urbanos e interprovinciales con integración de tracking.
+                    </p>
+                    <button type="button" className="secondary-button" disabled style={{ width: "100%", justifyContent: "center" }}>
+                      🔒 Próxima fase
+                    </button>
+                  </div>
+                </div>
+              </section>
+              <CarrierConfigModal
+                isOpen={isCarriersModalOpen}
+                onClose={() => setIsCarriersModalOpen(false)}
+              />
+            </div>
+          )}
           {section === "Integraciones" && <IntegrationsModule />}
           {section === "Mi perfil" && (
             <ProfileModule

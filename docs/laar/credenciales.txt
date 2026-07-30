@@ -1,0 +1,11 @@
+postman request POST 'https://api.laarcourier.com:9747/api/Login/authenticate' \
+
+  --header 'Content-Type: application/json' \
+
+  --body '{
+
+  "username": "prueba.plaza.api",
+
+  "password": "zhV-AL!]"
+
+}'

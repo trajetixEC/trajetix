@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { ECUADOR_BANKS } from "../../lib/ecuador-banks";
+import { getZeroMarginUsers, setZeroMarginUser } from "../../lib/carrier-config-store";
 
 type FinanceData = {
   wallet: { balance: number; currency: string };
@@ -419,6 +420,21 @@ export function StoreUsersModule() {
   const [status, setStatus] = useState("ALL");
   const [modal, setModal] = useState<UserModal>(null);
   const [saving, setSaving] = useState(false);
+  const [zeroMarginUsers, setZeroMarginUsersState] = useState<string[]>([]);
+
+  useEffect(() => {
+    setZeroMarginUsersState(getZeroMarginUsers());
+  }, []);
+
+  function toggleZeroMargin(userEmail: string, enable: boolean) {
+    setZeroMarginUser(userEmail, enable);
+    setZeroMarginUsersState(getZeroMarginUsers());
+    setMessage(
+      enable
+        ? `Se otorgó permiso de Envíos sin Ganancia (Precio de costo) a ${userEmail}`
+        : `Se revocó permiso de Envíos sin Ganancia para ${userEmail}`
+    );
+  }
   async function load() {
     const response = await fetch("/api/admin/members");
     if (response.ok) setData((await response.json()) as MembersData);
@@ -546,102 +562,116 @@ export function StoreUsersModule() {
                 <th>Teléfono</th>
                 <th>Estado</th>
                 <th>Rol</th>
+                <th>Envíos Sin Ganancia</th>
                 <th>Permisos</th>
                 <th>Último acceso</th>
                 <th>Acciones</th>
               </tr>
             </thead>
             <tbody>
-              {filtered.map((member) => (
-                <tr key={member.id}>
-                  <td>
-                    <strong>{member.user.name ?? "Sin nombre"}</strong>
-                  </td>
-                  <td>{member.user.email}</td>
-                  <td>{member.user.phone || "—"}</td>
-                  <td>
-                    <span
-                      className={`member-status ${member.status.toLowerCase()}`}
-                    >
-                      {member.status === "ACTIVE"
-                        ? "Activo"
-                        : member.status === "SUSPENDED"
-                          ? "Suspendido"
-                          : "Invitado"}
-                    </span>
-                  </td>
-                  <td>
-                    <select
-                      className="role-select"
-                      value={member.roles[0]?.id ?? ""}
-                      onChange={(event) =>
-                        void changeRole(member.id, event.target.value)
-                      }
-                    >
-                      {data.roles.map((role) => (
-                        <option key={role.id} value={role.id}>
-                          {role.name}
-                        </option>
-                      ))}
-                    </select>
-                  </td>
-                  <td>
-                    <button
-                      className="permission-count"
-                      onClick={() => setModal({ kind: "permissions", member })}
-                    >
-                      ♢ {member.permissions.length}
-                      {member.customPermissions
-                        ? " personalizados"
-                        : " por rol"}
-                    </button>
-                  </td>
-                  <td>
-                    {member.user.lastLoginAt
-                      ? new Date(member.user.lastLoginAt).toLocaleString(
-                          "es-EC",
-                        )
-                      : "Nunca"}
-                  </td>
-                  <td>
-                    <div className="user-actions">
-                      <button
-                        type="button"
-                        aria-label="Editar usuario"
-                        title="Editar usuario"
-                        onClick={() => setModal({ kind: "edit", member })}
+              {filtered.map((member) => {
+                const isZeroMargin = zeroMarginUsers.includes(member.user.email);
+                return (
+                  <tr key={member.id}>
+                    <td>
+                      <strong>{member.user.name ?? "Sin nombre"}</strong>
+                    </td>
+                    <td>{member.user.email}</td>
+                    <td>{member.user.phone || "—"}</td>
+                    <td>
+                      <span
+                        className={`member-status ${member.status.toLowerCase()}`}
                       >
-                        ✎
-                      </button>
-                      <button
-                        type="button"
-                        aria-label={
-                          member.status === "ACTIVE"
-                            ? "Suspender acceso"
-                            : "Activar acceso"
+                        {member.status === "ACTIVE"
+                          ? "Activo"
+                          : member.status === "SUSPENDED"
+                            ? "Suspendido"
+                            : "Invitado"}
+                      </span>
+                    </td>
+                    <td>
+                      <select
+                        className="role-select"
+                        value={member.roles[0]?.id ?? ""}
+                        onChange={(event) =>
+                          void changeRole(member.id, event.target.value)
                         }
-                        title={
-                          member.status === "ACTIVE"
-                            ? "Suspender acceso"
-                            : "Activar acceso"
-                        }
-                        onClick={() => void toggleStatus(member)}
                       >
-                        {member.status === "ACTIVE" ? "⊘" : "✓"}
-                      </button>
+                        {data.roles.map((role) => (
+                          <option key={role.id} value={role.id}>
+                            {role.name}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                    <td>
+                      <label className="zero-margin-toggle" title="Permitir generar envíos a precio de costo puro (0% ganancia Trajetix) para familiares, amigos o cuentas secundarias">
+                        <input
+                          type="checkbox"
+                          checked={isZeroMargin}
+                          onChange={(e) => toggleZeroMargin(member.user.email, e.target.checked)}
+                        />
+                        <span>{isZeroMargin ? "⚡ Precio Costo (0% Ganancia)" : "Estándar"}</span>
+                      </label>
+                    </td>
+                    <td>
                       <button
-                        type="button"
-                        className="danger-action"
-                        aria-label="Eliminar de la empresa"
-                        title="Eliminar de la empresa"
-                        onClick={() => void remove(member)}
+                        className="permission-count"
+                        onClick={() => setModal({ kind: "permissions", member })}
                       >
-                        ⌫
+                        ♢ {member.permissions.length}
+                        {member.customPermissions
+                          ? " personalizados"
+                          : " por rol"}
                       </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                    <td>
+                      {member.user.lastLoginAt
+                        ? new Date(member.user.lastLoginAt).toLocaleString(
+                            "es-EC",
+                          )
+                        : "Nunca"}
+                    </td>
+                    <td>
+                      <div className="user-actions">
+                        <button
+                          type="button"
+                          aria-label="Editar usuario"
+                          title="Editar usuario"
+                          onClick={() => setModal({ kind: "edit", member })}
+                        >
+                          ✎
+                        </button>
+                        <button
+                          type="button"
+                          aria-label={
+                            member.status === "ACTIVE"
+                              ? "Suspender acceso"
+                              : "Activar acceso"
+                          }
+                          title={
+                            member.status === "ACTIVE"
+                              ? "Suspender acceso"
+                              : "Activar acceso"
+                          }
+                          onClick={() => void toggleStatus(member)}
+                        >
+                          {member.status === "ACTIVE" ? "⊘" : "✓"}
+                        </button>
+                        <button
+                          type="button"
+                          className="danger-action"
+                          aria-label="Eliminar de la empresa"
+                          title="Eliminar de la empresa"
+                          onClick={() => void remove(member)}
+                        >
+                          ⌫
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
           {filtered.length === 0 && (

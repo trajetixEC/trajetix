@@ -1,6 +1,12 @@
 "use client";
 
 import { Fragment, useEffect, useMemo, useState } from "react";
+import { CarrierConfigModal } from "./carrier-config-modal";
+import {
+  calculateCarrierFreightRate,
+  getZeroMarginUsers,
+  loadCarrierConfig,
+} from "../../lib/carrier-config-store";
 
 type Warehouse = {
   id: string;
@@ -159,6 +165,7 @@ export function NewShipmentModule({
   const [quoting, setQuoting] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [isCarrierModalOpen, setIsCarrierModalOpen] = useState(false);
   const [success, setSuccess] = useState<{
     tracking: string;
     labelUrl?: string | null;
@@ -387,20 +394,44 @@ export function NewShipmentModule({
     setQuotes([]);
     setSelectedQuoteToken("");
     try {
-      const response = await fetch("/api/shipping/quotes", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(quotePayload()),
+      // Cargar configuración parametrizada de transportadoras
+      const laarConfig = loadCarrierConfig("laar");
+      const zeroMarginUsers = getZeroMarginUsers();
+      const isZeroMargin =
+        zeroMarginUsers.includes(draft.senderName) ||
+        zeroMarginUsers.includes(draft.recipientName);
+
+      const computed = calculateCarrierFreightRate({
+        config: laarConfig,
+        originCity: draft.originCity,
+        destinationCity: draft.destinationCity,
+        weightKg: draft.weightKg,
+        codAmount: draft.paymentMode === "COD" ? draft.cod : 0,
+        isZeroMarginUser: isZeroMargin,
       });
-      const body = (await response.json().catch(() => ({}))) as {
-        error?: string;
-        quotes?: Quote[];
-      };
-      if (!response.ok)
-        return setError(
-          body.error ?? "No fue posible consultar las transportadoras",
-        );
-      setQuotes(body.quotes ?? []);
+
+      const calculatedQuotes: Quote[] = [];
+
+      if (laarConfig.active) {
+        calculatedQuotes.push({
+          carrier: laarConfig.general.name,
+          carrierKey: "laar",
+          service: isZeroMargin
+            ? "⚡ Servicio Express (0% Ganancia - Precio Costo)"
+            : "Servicio Express Nacional (LAAR)",
+          amount: Number(computed.finalPriceToClient.toFixed(2)),
+          currency: "USD",
+          estimatedDays: computed.zoneKey === "local" ? 1 : computed.zoneKey === "oriente" ? 3 : 2,
+          token: `laar-${Date.now()}-${computed.finalPriceToClient.toFixed(2)}`,
+        });
+      }
+
+      setQuotes(calculatedQuotes);
+      if (calculatedQuotes.length === 0) {
+        setError("La transportadora LAAR Courier está desactivada o no está disponible.");
+      }
+    } catch (err: any) {
+      setError(err?.message || "No fue posible calcular las tarifas de envío");
     } finally {
       setQuoting(false);
     }
@@ -835,7 +866,17 @@ export function NewShipmentModule({
       {step === 3 && (
         <div className="carrier-layout">
           <section className="panel shipping-card carrier-parameters">
-            <h2>Parámetros</h2>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
+              <h2 style={{ margin: 0 }}>Parámetros</h2>
+              <button
+                type="button"
+                className="secondary-button"
+                style={{ padding: "6px 12px", fontSize: "0.85rem", display: "flex", alignItems: "center", gap: "6px" }}
+                onClick={() => setIsCarrierModalOpen(true)}
+              >
+                ⚙ Configurar transportadoras
+              </button>
+            </div>
             <span className="section-label">Modalidad de cobro</span>
             <div className="mode-tabs">
               <button
@@ -1066,6 +1107,11 @@ export function NewShipmentModule({
           )}
         </div>
       )}
+      <CarrierConfigModal
+        isOpen={isCarrierModalOpen}
+        onClose={() => setIsCarrierModalOpen(false)}
+        onSaved={() => void calculateQuotes()}
+      />
     </>
   );
 }
