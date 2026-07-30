@@ -3,9 +3,6 @@ import type { NextConfig } from "next";
 const config: NextConfig = {
   poweredByHeader: false,
   typedRoutes: true,
-  outputFileTracingIncludes: {
-    "/*": ["./generated/client/libquery_engine-rhel-openssl-3.0.x.so.node"],
-  },
   headers: async () => [
     {
       source: "/(.*)",
