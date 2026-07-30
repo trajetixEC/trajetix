@@ -3,7 +3,6 @@ import { PrismaAdapter } from "@auth/prisma-adapter";
 import Credentials from "next-auth/providers/credentials";
 import Google from "next-auth/providers/google";
 import Resend from "next-auth/providers/resend";
-import type { Provider } from "next-auth/providers";
 import { compare } from "bcryptjs";
 import { TOTP } from "otpauth";
 import { z } from "zod";
@@ -18,7 +17,7 @@ const credentialsSchema = z.object({
   password: z.string().min(8),
   otp: z.string().optional(),
 });
-const providers: Provider[] = [Google];
+const providers: any[] = [Google];
 if (process.env.RESEND_API_KEY)
   providers.push(
     Resend({
@@ -39,7 +38,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         password: { label: "Contraseña", type: "password" },
         otp: { label: "Código 2FA", type: "text" },
       },
-      async authorize(raw) {
+      async authorize(raw: Record<string, any>) {
         const parsed = credentialsSchema.safeParse(raw);
         if (!parsed.success) return null;
         const user = await getPrisma().user.findUnique({
@@ -67,7 +66,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   ],
   callbacks: {
     ...authConfig.callbacks,
-    async jwt({ token, user }) {
+    async jwt({ token, user }: { token: any; user?: any }) {
       const userId = user?.id ?? String(token.userId ?? token.sub ?? "");
       if (userId) {
         token.userId = userId;
@@ -104,7 +103,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       }
       return token;
     },
-    session({ session, token }) {
+    session({ session, token }: { session: any; token: any }) {
       if (session.user) {
         session.user.id = String(token.userId ?? token.sub);
         if (token.tenantId) session.user.tenantId = String(token.tenantId);
@@ -118,7 +117,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     },
   },
   events: {
-    async signIn({ user }) {
+    async signIn({ user }: { user: any }) {
       if (!user.email || !user.id) return;
       const email = user.email.toLowerCase();
       await getPrisma().user.update({
