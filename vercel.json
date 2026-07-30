@@ -1,7 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "nextjs",
-  "installCommand": "corepack enable && pnpm install --frozen-lockfile",
+  "installCommand": "corepack enable && pnpm install --no-frozen-lockfile",
   "buildCommand": "pnpm turbo build --filter=@trajetix/web",
   "outputDirectory": "apps/web/.next",
   "regions": ["iad1"]
