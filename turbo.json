@@ -3,6 +3,25 @@
   "globalEnv": [
     "DATABASE_URL",
     "DIRECT_URL",
+    "POSTGRES_PRISMA_URL",
+    "POSTGRES_URL",
+    "POSTGRES_URL_NON_POOLING",
+    "POSTGRES_URL_NO_SSL",
+    "DATABASE_URL_UNPOOLED",
+    "PGHOST",
+    "PGHOST_UNPOOLED",
+    "PGUSER",
+    "PGPASSWORD",
+    "PGDATABASE",
+    "POSTGRES_USER",
+    "POSTGRES_PASSWORD",
+    "POSTGRES_DATABASE",
+    "POSTGRES_HOST",
+    "NEON_PROJECT_ID",
+    "NEON_AUTH_BASE_URL",
+    "VITE_NEON_AUTH_URL",
+    "RESEND_EMAIL_DOMAIN",
+    "RESEND_API_KEY",
     "NODE_ENV",
     "NEXT_PUBLIC_APP_URL",
     "AUTH_SECRET",
@@ -17,11 +36,13 @@
     "AUTH_GITHUB_ID",
     "AUTH_GITHUB_SECRET",
     "AUTH_APPLE_ID",
-    "AUTH_APPLE_SECRET",
-    "RESEND_API_KEY"
+    "AUTH_APPLE_SECRET"
   ],
   "tasks": {
-    "build": { "dependsOn": ["^build"], "outputs": [".next/**", "!.next/cache/**", "dist/**", "apps/web/generated/**"] },
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": [".next/**", "!.next/cache/**", "dist/**", "apps/web/generated/**"]
+    },
     "dev": { "cache": false, "persistent": true },
     "lint": { "dependsOn": ["^lint"] },
     "typecheck": { "dependsOn": ["^typecheck"] },
