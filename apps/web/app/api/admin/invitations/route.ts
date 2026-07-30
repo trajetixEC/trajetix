@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { createHash, randomBytes } from "node:crypto";
 import { z } from "zod";
 import { auth } from "../../../../auth";

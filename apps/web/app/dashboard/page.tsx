@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { auth } from "../../auth";
 import { DashboardApp } from "./dashboard-app";
 
+export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Centro de operaciones" };
 
 export default async function DashboardPage() {

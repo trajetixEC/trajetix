@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { createHash } from "node:crypto";
 import { hash } from "bcryptjs";
 import { z } from "zod";

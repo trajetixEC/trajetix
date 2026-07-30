@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { createCipheriv, createHash, randomBytes } from "node:crypto";
 import { z } from "zod";
 import { ECUADOR_BANKS } from "../../../../lib/ecuador-banks";

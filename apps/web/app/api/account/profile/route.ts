@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { compare, hash } from "bcryptjs";
 import type { Prisma } from "../../../../generated/client";
 import { auth } from "../../../../auth";

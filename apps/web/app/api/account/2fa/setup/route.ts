@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { TOTP } from "otpauth";
 import { auth } from "../../../../../auth";
 import { encryptSecret } from "../../../../../lib/secrets";

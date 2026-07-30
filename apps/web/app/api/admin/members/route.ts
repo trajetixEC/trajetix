@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { hash } from "bcryptjs";
 import { z } from "zod";
 import { getPrisma } from "../../../../lib/prisma";

@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { z } from "zod";
 import { getPrisma } from "../../../../lib/prisma";
 import { requirePlatformAdmin, tenantError } from "../../../../lib/tenant";

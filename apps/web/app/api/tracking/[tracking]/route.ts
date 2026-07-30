@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { getPrisma } from "../../../../lib/prisma";
 
 export async function GET(_request: Request, context: { params: Promise<{ tracking: string }> }) {

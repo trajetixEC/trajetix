@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { hash } from "bcryptjs";
 import { cookies } from "next/headers";
 import { z } from "zod";
