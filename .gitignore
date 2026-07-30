@@ -1,0 +1,17 @@
+node_modules
+.next
+.turbo
+dist
+coverage
+.env
+.env.local
+*.log
+*.tsbuildinfo
+.DS_Store
+packages/database/generated
+apps/web/generated
+playwright-report
+test-results
+
+.vercel
+.env*

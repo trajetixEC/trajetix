@@ -1,0 +1,39 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "TrajetixERP API",
+    "version": "1.0.0",
+    "description": "API multi-tenant. Cada operación se limita a la empresa de la sesión autenticada."
+  },
+  "servers": [{ "url": "https://trajetix.com/api" }],
+  "paths": {
+    "/health": { "get": { "operationId": "health", "responses": { "200": { "description": "Servicio disponible" } } } },
+    "/products": {
+      "get": { "operationId": "listProducts", "security": [{ "sessionAuth": [] }], "responses": { "200": { "description": "Productos y stock por bodega" } } },
+      "post": { "operationId": "createProduct", "security": [{ "sessionAuth": [] }], "responses": { "201": { "description": "Producto creado" } } }
+    },
+    "/customers": {
+      "get": { "operationId": "listCustomers", "security": [{ "sessionAuth": [] }], "responses": { "200": { "description": "Clientes de la empresa" } } },
+      "post": { "operationId": "createCustomer", "security": [{ "sessionAuth": [] }], "responses": { "201": { "description": "Cliente creado" } } }
+    },
+    "/warehouses": {
+      "get": { "operationId": "listWarehouses", "security": [{ "sessionAuth": [] }], "responses": { "200": { "description": "Bodegas y existencias" } } },
+      "post": { "operationId": "createWarehouse", "security": [{ "sessionAuth": [] }], "responses": { "201": { "description": "Bodega registrada" } } }
+    },
+    "/inventory/adjustments": {
+      "post": { "operationId": "adjustInventory", "security": [{ "sessionAuth": [] }], "responses": { "200": { "description": "Stock ajustado y movimiento registrado" } } }
+    },
+    "/shipments": {
+      "get": { "operationId": "listShipments", "security": [{ "sessionAuth": [] }], "responses": { "200": { "description": "Envíos de la empresa" } } },
+      "post": { "operationId": "createShipment", "security": [{ "sessionAuth": [] }], "responses": { "201": { "description": "Envío creado" } } }
+    },
+    "/integrations": {
+      "get": { "operationId": "listIntegrations", "security": [{ "sessionAuth": [] }], "responses": { "200": { "description": "Shopify, carriers y webhooks configurados" } } },
+      "post": { "operationId": "configureIntegration", "security": [{ "sessionAuth": [] }], "responses": { "201": { "description": "Integración configurada" } } }
+    },
+    "/webhooks": {
+      "post": { "operationId": "createWebhook", "security": [{ "sessionAuth": [] }], "responses": { "201": { "description": "Webhook y secreto de firma creados" } } }
+    }
+  },
+  "components": { "securitySchemes": { "sessionAuth": { "type": "apiKey", "in": "cookie", "name": "authjs.session-token" } } }
+}

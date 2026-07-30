@@ -1,0 +1,5 @@
+"use client";
+import Link from "next/link";
+import type { Route } from "next";
+import { FormEvent, useState } from "react";
+export default function RecoveryPage() { const [sent,setSent]=useState(false); const [loading,setLoading]=useState(false); async function submit(event:FormEvent<HTMLFormElement>){event.preventDefault();setLoading(true);const form=new FormData(event.currentTarget);await fetch("/api/auth/password/forgot",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email:form.get("email")})});setLoading(false);setSent(true)} return <main className="simple-auth"><div><span>↺</span><h1>Recuperar contraseña</h1><p>{sent?"Si la cuenta existe, recibirás un enlace seguro en los próximos minutos.":"Ingresa tu correo y te enviaremos un enlace válido durante 30 minutos."}</p>{!sent&&<form onSubmit={submit}><label>Correo electrónico<input name="email" type="email" required placeholder="tu@empresa.com" /></label><button className="auth-submit" disabled={loading}>{loading?"Enviando...":"Enviar enlace"}</button></form>}<Link href={"/login" as Route}>← Volver al inicio de sesión</Link></div></main> }

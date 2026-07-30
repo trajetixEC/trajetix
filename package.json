@@ -1,0 +1,23 @@
+{
+  "name": "trajetix-erp",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@10.12.1",
+  "engines": { "node": ">=22 <23" },
+  "scripts": {
+    "build": "turbo build",
+    "dev": "turbo dev",
+    "lint": "turbo lint",
+    "test": "turbo test",
+    "typecheck": "turbo typecheck",
+    "format": "prettier --write .",
+    "db:generate": "pnpm --filter @trajetix/database generate",
+    "db:migrate": "pnpm --filter @trajetix/database migrate:dev",
+    "db:studio": "pnpm --filter @trajetix/database studio"
+  },
+  "devDependencies": {
+    "prettier": "^3.5.3",
+    "turbo": "^2.5.4",
+    "typescript": "^5.8.3"
+  }
+}

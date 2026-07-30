@@ -1,0 +1,1 @@
+ALTER TABLE "Shipment" ADD COLUMN "origin" JSONB NOT NULL DEFAULT '{}';
