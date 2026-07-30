@@ -59,8 +59,8 @@ export function CarrierConfigModal({ isOpen, onClose, onSaved }: CarrierConfigMo
           message: "Credenciales incompletas. Ingrese usuario y contraseña API.",
         });
       }
-    } catch (err: any) {
-      setApiStatus({ success: false, message: err.message || "Error al conectar con la API de LAAR" });
+    } catch (err: unknown) {
+      setApiStatus({ success: false, message: (err as Error).message || "Error al conectar con la API de LAAR" });
     } finally {
       setTestingApi(false);
     }
@@ -646,7 +646,7 @@ export function CarrierConfigModal({ isOpen, onClose, onSaved }: CarrierConfigMo
                     <strong className="profit-text">+${simResult.trajetixProfitTotal.toFixed(2)}</strong>
                   </div>
                   <div className="sim-row final-total">
-                    <span>Precio Final en "Nuevo Envío":</span>
+                    <span>Precio Final en &quot;Nuevo Envío&quot;:</span>
                     <strong className="final-price">${simResult.finalPriceToClient.toFixed(2)}</strong>
                   </div>
                 </div>
@@ -659,7 +659,7 @@ export function CarrierConfigModal({ isOpen, onClose, onSaved }: CarrierConfigMo
             <div className="tab-pane">
               <h3>Tabla Traductora de Localidades y Cobertura (LAAR)</h3>
               <p className="tab-note">
-                Normaliza y traduce las ciudades ingresadas por los usuarios en "Nuevo envío" hacia la codificación de LAAR Courier y su zona tarifaria.
+                Normaliza y traduce las ciudades ingresadas por los usuarios en &quot;Nuevo envío&quot; hacia la codificación de LAAR Courier y su zona tarifaria.
               </p>
 
               <div className="add-mapping-form">

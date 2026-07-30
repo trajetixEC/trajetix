@@ -311,27 +311,6 @@ export function NewShipmentModule({
     ];
   }
 
-  function quotePayload() {
-    return {
-      origin: {
-        name: draft.senderName,
-        phone: draft.senderPhone,
-        country: "EC" as const,
-        city: draft.originCity,
-        line1: draft.originAddress,
-      },
-      destination: {
-        name: draft.recipientName,
-        phone: draft.recipientPhone,
-        country: "EC" as const,
-        city: draft.destinationCity,
-        line1: draft.destinationAddress,
-        reference: draft.destinationReference,
-      },
-      parcels: parcels(),
-      codMinor: draft.paymentMode === "COD" ? Math.round(draft.cod * 100) : 0,
-    };
-  }
 
   function validationMessage(targetStep = step) {
     if (
@@ -430,8 +409,8 @@ export function NewShipmentModule({
       if (calculatedQuotes.length === 0) {
         setError("La transportadora LAAR Courier está desactivada o no está disponible.");
       }
-    } catch (err: any) {
-      setError(err?.message || "No fue posible calcular las tarifas de envío");
+    } catch (err: unknown) {
+      setError((err as Error)?.message || "No fue posible calcular las tarifas de envío");
     } finally {
       setQuoting(false);
     }

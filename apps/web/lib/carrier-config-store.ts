@@ -173,7 +173,7 @@ export function calculateCarrierFreightRate(params: {
   codAmount: number;
   isZeroMarginUser?: boolean;
 }) {
-  const { config, originCity, destinationCity, weightKg, codAmount, isZeroMarginUser = false } = params;
+  const { config, destinationCity, weightKg, codAmount, isZeroMarginUser = false } = params;
 
   // Search zone mapping
   const destMapping = config.locationMappings.find(

@@ -597,7 +597,7 @@ export function DashboardApp({
                   <span>CONFIGURACIÓN DE PLATAFORMA</span>
                   <h1>Transportadoras de Envío</h1>
                   <p>
-                    Administra las empresas de envío disponibles para cotizar en el flujo de "Nuevo envío", parámetros de fletes, recolección, márgenes de ganancia y mapa de localidades.
+                    Administra las empresas de envío disponibles para cotizar en el flujo de &quot;Nuevo envío&quot;, parámetros de fletes, recolección, márgenes de ganancia y mapa de localidades.
                   </p>
                 </div>
               </div>
