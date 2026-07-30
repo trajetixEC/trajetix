@@ -41,7 +41,10 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": [".next/**", "!.next/cache/**", "dist/**", "apps/web/generated/**"]
+      "outputs": [".next/**", "!.next/cache/**", "dist/**"]
+    },
+    "@trajetix/database#build": {
+      "cache": false
     },
     "dev": { "cache": false, "persistent": true },
     "lint": { "dependsOn": ["^lint"] },
