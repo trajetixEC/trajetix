@@ -23,9 +23,6 @@ importers:
       '@auth/prisma-adapter':
         specifier: ^2.11.2
         version: 2.11.2(@prisma/client@6.19.3(prisma@6.19.3(typescript@5.9.3))(typescript@5.9.3))
-      '@prisma/client':
-        specifier: ^6.19.3
-        version: 6.19.3(prisma@6.19.3(typescript@5.9.3))
       '@trajetix/core':
         specifier: workspace:*
         version: link:../../packages/core
@@ -72,9 +69,6 @@ importers:
       eslint-config-next:
         specifier: ^15.3.4
         version: 15.5.20(eslint@9.39.5(jiti@2.7.0))(typescript@5.9.3)
-      prisma:
-        specifier: ^6.19.3
-        version: 6.19.3(typescript@5.9.3)
       typescript:
         specifier: ^5.8.3
         version: 5.9.3
