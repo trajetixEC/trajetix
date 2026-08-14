@@ -47,8 +47,8 @@ export async function POST(request: Request) {
       return Response.json({ error: "Guía de envío no encontrada" }, { status: 404 });
     }
 
-    const currentRecipient = (shipment.recipient as any) || {};
-    const currentAddress = (shipment.address as any) || {};
+    const currentRecipient = (shipment.recipient as Record<string, unknown>) || {};
+    const currentAddress = (shipment.address as Record<string, unknown>) || {};
 
     const isDevolucion = data.action === "RETURN_TO_SENDER";
 
@@ -59,12 +59,12 @@ export async function POST(request: Request) {
         const laarRes = await resolveLaarNovelty({
           guia: shipment.trackingNumber,
           destino: {
-            callePrincipal: data.callePrincipal || currentAddress.line1 || "Calle Principal",
+            callePrincipal: data.callePrincipal || (currentAddress.line1 as string) || "Calle Principal",
             numeracion: data.numeracion || "SN",
-            calleSecundaria: data.calleSecundaria || currentAddress.line2 || "Calle Secundaria",
-            referencia: data.referencia || currentAddress.reference || "Sin referencia",
-            telefono: data.telefono || currentRecipient.phone || "0999999999",
-            celular: data.telefono || currentRecipient.phone || "0999999999",
+            calleSecundaria: data.calleSecundaria || (currentAddress.line2 as string) || "Calle Secundaria",
+            referencia: data.referencia || (currentAddress.reference as string) || "Sin referencia",
+            telefono: data.telefono || (currentRecipient.phone as string) || "0999999999",
+            celular: data.telefono || (currentRecipient.phone as string) || "0999999999",
             observacion: data.observacion,
           },
           autorizado: {
@@ -84,14 +84,14 @@ export async function POST(request: Request) {
     // 4. Update local DB records
     const updatedAddress = {
       ...currentAddress,
-      line1: data.callePrincipal ? `${data.callePrincipal} ${data.numeracion || ""}`.trim() : currentAddress.line1,
-      line2: data.calleSecundaria || currentAddress.line2 || "",
-      reference: data.referencia || currentAddress.reference || "",
+      line1: data.callePrincipal ? `${data.callePrincipal} ${data.numeracion || ""}`.trim() : (currentAddress.line1 as string),
+      line2: data.calleSecundaria || (currentAddress.line2 as string) || "",
+      reference: data.referencia || (currentAddress.reference as string) || "",
     };
 
     const updatedRecipient = {
       ...currentRecipient,
-      phone: data.telefono || currentRecipient.phone || "",
+      phone: data.telefono || (currentRecipient.phone as string) || "",
     };
 
     const newStatus = isDevolucion ? ShipmentStatus.RETURNED : ShipmentStatus.IN_TRANSIT;
@@ -99,7 +99,7 @@ export async function POST(request: Request) {
       ? `Devolución autorizada por la tienda. Motivo: ${data.observacion}`
       : `Novedad resuelta por la tienda. Reintento programado con dirección actualizada: ${updatedAddress.line1}, Ref: ${updatedAddress.reference}. Obs: ${data.observacion}`;
 
-    await getPrisma().$transaction(async (tx: any) => {
+    await getPrisma().$transaction(async (tx) => {
       await tx.shipment.update({
         where: { id: shipment.id },
         data: {

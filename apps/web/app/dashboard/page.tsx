@@ -11,7 +11,7 @@ export default async function DashboardPage() {
   const session = await auth();
   if (!session?.user) redirect("/login" as Route);
 
-  const isSuperAdmin = (session.user as any).platformRole === "SUPER_ADMIN";
+  const isSuperAdmin = (session.user as Record<string, unknown>).platformRole === "SUPER_ADMIN";
   const rawRole = session.user.roles[0] ?? "viewer";
   const roleLabel = isSuperAdmin
     ? "SuperAdmin"

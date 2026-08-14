@@ -11,13 +11,7 @@ import {
   CheckCircle2,
   XCircle,
   Eye,
-  AlertCircle,
   RefreshCw,
-  FileText,
-  Plus,
-  CreditCard,
-  History,
-  ShieldCheck,
 } from "lucide-react";
 
 type RechargeItem = {
@@ -155,8 +149,8 @@ export function FinanceModule() {
         maxSizeBytes: 2 * 1024 * 1024,
       });
       setReceiptUrl(processed.dataUrl);
-    } catch (err: any) {
-      setMessage(err.message || "Error al procesar la captura comprobante.");
+    } catch (err: unknown) {
+      setMessage(err instanceof Error ? err.message : "Error al procesar la captura comprobante.");
     } finally {
       setImageProcessing(false);
     }
@@ -191,8 +185,8 @@ export function FinanceModule() {
       setRechargeNote("");
       await loadRecharges();
       window.dispatchEvent(new Event("wallet:updated"));
-    } catch (err: any) {
-      setMessage(err.message || "Error al enviar la recarga");
+    } catch (err: unknown) {
+      setMessage(err instanceof Error ? err.message : "Error al enviar la recarga");
     } finally {
       setLoadingRecharge(false);
     }
@@ -213,8 +207,8 @@ export function FinanceModule() {
       await loadRecharges();
       await load();
       window.dispatchEvent(new Event("wallet:updated"));
-    } catch (err: any) {
-      setMessage(err.message || "Error al procesar la recarga");
+    } catch (err: unknown) {
+      setMessage(err instanceof Error ? err.message : "Error al procesar la recarga");
     } finally {
       setProcessingActionId(null);
     }

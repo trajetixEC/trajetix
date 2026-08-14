@@ -135,7 +135,7 @@ async function handleCronSync(request: Request) {
             const isStatusChanged = newStatus !== shipment.status;
 
             if (isStatusChanged || (laarData.novedades && laarData.novedades.length > 0)) {
-              await getPrisma().$transaction(async (tx: any) => {
+              await getPrisma().$transaction(async (tx) => {
                 // Update shipment status
                 await tx.shipment.update({
                   where: { id: shipment.id },
@@ -159,13 +159,13 @@ async function handleCronSync(request: Request) {
                   },
                 });
 
-                // LIQUIDAR DINERO REAL DE COD SOLO AL ENTREGAR DELIVERED (Proyección -> Dinero Real)
                 const codAmount = Number(shipment.codMinor ?? 0);
+                const codMinorBigInt = shipment.codMinor ?? 0n;
                 if (newStatus === ShipmentStatus.DELIVERED && codAmount > 0 && shipment.status !== ShipmentStatus.DELIVERED) {
                   const currentWallet = await tx.wallet.upsert({
                     where: { tenantId: shipment.tenantId },
-                    update: { balanceMinor: { increment: shipment.codMinor } },
-                    create: { tenantId: shipment.tenantId, balanceMinor: shipment.codMinor },
+                    update: { balanceMinor: { increment: codMinorBigInt } },
+                    create: { tenantId: shipment.tenantId, balanceMinor: codMinorBigInt },
                   });
 
                   const balanceAfter = Number(currentWallet.balanceMinor);
@@ -175,7 +175,7 @@ async function handleCronSync(request: Request) {
                     data: {
                       tenantId: shipment.tenantId,
                       type: "CREDIT",
-                      amountMinor: shipment.codMinor,
+                      amountMinor: codMinorBigInt,
                       balanceBeforeMinor: BigInt(balanceBefore),
                       balanceAfterMinor: BigInt(balanceAfter),
                       description: `Recaudo COD liquidado por entrega exitosa de guía ${shipment.trackingNumber}`,

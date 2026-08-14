@@ -2,7 +2,6 @@
 
 import { Fragment, useEffect, useMemo, useState } from "react";
 import {
-  MapPin,
   User,
   Building2,
   Package,
@@ -11,7 +10,6 @@ import {
   CheckCircle2,
   Calculator,
   TrendingUp,
-  Sparkles,
   AlertCircle,
   ArrowRight,
   ChevronRight,
@@ -21,21 +19,17 @@ import {
   Check,
   Receipt,
   DollarSign,
-  Briefcase,
   Store,
   SlidersHorizontal,
   FileText,
-  Info,
   MoreVertical,
-  Lock,
-  X,
   Loader2,
   Ban,
   Eye,
   EyeOff,
 } from "lucide-react";
 import { CarrierConfigModal } from "./carrier-config-modal";
-import { CitySelect, LocationOption } from "./city-select";
+import { CitySelect } from "./city-select";
 import {
   calculateCarrierFreightRate,
   getZeroMarginUsers,
@@ -2055,15 +2049,15 @@ function ResolveNoveltyModal({
   onClose: () => void;
   onSuccess: () => void;
 }) {
-  const address = (shipment.address as any) || {};
-  const recipient = (shipment.recipient as any) || {};
+  const address = (shipment.address as Record<string, unknown>) || {};
+  const recipient = (shipment.recipient as Record<string, unknown>) || {};
 
   const [action, setAction] = useState<"RETRY_DELIVERY" | "RETURN_TO_SENDER">("RETRY_DELIVERY");
-  const [callePrincipal, setCallePrincipal] = useState(address.line1 || "");
+  const [callePrincipal, setCallePrincipal] = useState((address.line1 as string) || "");
   const [numeracion, setNumeracion] = useState("");
-  const [calleSecundaria, setCalleSecundaria] = useState(address.line2 || "");
-  const [referencia, setReferencia] = useState(address.reference || "");
-  const [telefono, setTelefono] = useState(recipient.phone || "");
+  const [calleSecundaria, setCalleSecundaria] = useState((address.line2 as string) || "");
+  const [referencia, setReferencia] = useState((address.reference as string) || "");
+  const [telefono, setTelefono] = useState((recipient.phone as string) || "");
   const [observacion, setObservacion] = useState("");
 
   const [loading, setLoading] = useState(false);
@@ -2100,8 +2094,8 @@ function ResolveNoveltyModal({
 
       onSuccess();
       onClose();
-    } catch (err: any) {
-      setError(err.message || "Error al procesar la solución de la novedad");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Error al procesar la solución de la novedad");
     } finally {
       setLoading(false);
     }
@@ -2117,7 +2111,7 @@ function ResolveNoveltyModal({
         </span>
         <h2 className="text-lg font-bold mt-1">Solucionar Novedad de Guía</h2>
         <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 mb-4">
-          Guía: <strong className="font-mono text-slate-900 dark:text-white">{shipment.tracking || shipment.id}</strong> · Destinatario: <strong className="text-slate-200">{recipient.name || "Cliente"}</strong>
+          Guía: <strong className="font-mono text-slate-900 dark:text-white">{shipment.tracking || shipment.id}</strong> · Destinatario: <strong className="text-slate-200">{(recipient.name as string) || "Cliente"}</strong>
         </p>
 
         {error && (
@@ -2324,8 +2318,8 @@ function CancelShipmentModal({
 
       onSuccess();
       onClose();
-    } catch (err: any) {
-      setError(err.message || "Error al anular la guía");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Error al anular la guía");
     } finally {
       setLoading(false);
     }
@@ -2400,20 +2394,7 @@ function CancelShipmentModal({
 }
 export function TrackingModule() {
   const [tracking, setTracking] = useState("");
-  const [result, setResult] = useState<{
-    guide: string;
-    carrier: string;
-    service?: string;
-    status: string;
-    destination: string;
-    events: Array<{
-      status: string;
-      description: string;
-      location?: string | null;
-      occurredAt: string;
-    }>;
-  } | null>(null);
-  const [message, setMessage] = useState("");
+
   function search() {
     const trimmed = tracking.trim();
     if (trimmed) {
@@ -2422,9 +2403,6 @@ export function TrackingModule() {
       window.location.href = `/tracking`;
     }
   }
-  const shareUrl = result
-    ? `/tracking?guia=${encodeURIComponent(result.guide)}`
-    : "";
   return (
     <>
       <ShippingHeader
@@ -2450,49 +2428,6 @@ export function TrackingModule() {
             </button>
           </div>
         </label>
-        {message && <p className="selection-note">{message}</p>}
-        {result && (
-          <>
-            <div className="tracking-result">
-              <span className="operation-icon">✓</span>
-              <div>
-                <small>
-                  {result.carrier} · {result.service}
-                </small>
-                <h2>{result.guide}</h2>
-                <p>Destino: {result.destination}</p>
-              </div>
-              <b>{result.status}</b>
-            </div>
-            <div className="tracking-timeline dashboard-timeline">
-              {result.events.map((item, index) => (
-                <div key={`${item.occurredAt}-${index}`}>
-                  <i></i>
-                  <span>
-                    <b>{item.description}</b>
-                    <small>
-                      {item.location ? `${item.location} · ` : ""}
-                      {new Date(item.occurredAt).toLocaleString("es-EC")}
-                    </small>
-                  </span>
-                </div>
-              ))}
-            </div>
-            <div className="share-tracking">
-              <input readOnly value={shareUrl} />
-              <button
-                className="secondary-button"
-                onClick={() =>
-                  void navigator.clipboard.writeText(
-                    `${window.location.origin}${shareUrl}`,
-                  )
-                }
-              >
-                Copiar enlace público
-              </button>
-            </div>
-          </>
-        )}
       </section>
     </>
   );

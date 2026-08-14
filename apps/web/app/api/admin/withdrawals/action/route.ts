@@ -65,7 +65,7 @@ export async function POST(request: Request) {
     }
 
     // Execute atomic resolution
-    await prisma.$transaction(async (tx: any) => {
+    await prisma.$transaction(async (tx) => {
       if (action === "APPROVE") {
         await tx.withdrawal.update({
           where: { id: withdrawal.id },

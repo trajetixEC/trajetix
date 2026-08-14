@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { MapPin, Search, X, Check, Loader2 } from "lucide-react";
+import { MapPin, X, Check, Loader2 } from "lucide-react";
 
 export type LocationOption = {
   id: string;

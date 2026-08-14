@@ -32,7 +32,7 @@ let googleOptionsConfigured = false;
 
 export function GoogleMapPicker({
   city = "Quito",
-  address = "",
+  address: _address = "",
   initialLat = -0.1807,
   initialLng = -78.4678,
 }: LocationPickerProps) {

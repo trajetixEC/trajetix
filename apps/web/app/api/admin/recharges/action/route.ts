@@ -64,7 +64,7 @@ export async function POST(request: Request) {
     }
 
     // Execute atomic resolution
-    await prisma.$transaction(async (tx: any) => {
+    await prisma.$transaction(async (tx) => {
       if (action === "APPROVE") {
         // 1. Update recharge status
         await tx.walletRecharge.update({

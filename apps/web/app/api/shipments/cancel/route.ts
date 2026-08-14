@@ -82,7 +82,7 @@ export async function POST(request: Request) {
     }
 
     // 5. Update shipment status in database
-    await getPrisma().$transaction(async (tx: any) => {
+    await getPrisma().$transaction(async (tx) => {
       await tx.shipment.update({
         where: { id: shipment.id },
         data: { status: ShipmentStatus.CANCELLED },

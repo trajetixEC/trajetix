@@ -19,7 +19,7 @@ import { ReferralsModule } from "./referrals-module";
 import { TopbarWallet } from "./topbar-wallet";
 import { GoogleMapPicker } from "./google-map-picker";
 import { CitySelect } from "./city-select";
-import { Pencil, Trash2, AlertTriangle, X, Loader2, AlertCircle, CheckCircle2, Info, DollarSign, Package } from "lucide-react";
+import { Pencil, Trash2, AlertTriangle, X, Loader2, AlertCircle } from "lucide-react";
 
 type Product = {
   id: string;
@@ -1798,7 +1798,6 @@ function EntityModal({
   const [productFormError, setProductFormError] = useState("");
   const [warehouseCity, setWarehouseCity] = useState("Quito");
   const [warehouseAddress, setWarehouseAddress] = useState("");
-  const [markerAnchor, setMarkerAnchor] = useState<[number, number]>([-0.1807, -78.4678]);
   const titles = {
     product: "Nuevo producto",
     customer: "Nuevo cliente",

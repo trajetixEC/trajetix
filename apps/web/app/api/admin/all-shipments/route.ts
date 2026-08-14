@@ -36,9 +36,10 @@ export async function GET() {
     });
 
     const formatted = shipments.map((item: (typeof shipments)[number]) => {
-      const packages = (item.packages as any[]) || [];
-      const recipient = (item.recipient as any) || {};
-      const address = (item.address as any) || {};
+      const packages = (item.packages as Record<string, unknown>[]) || [];
+      const recipient = (item.recipient as Record<string, unknown>) || {};
+      const address = (item.address as Record<string, unknown>) || {};
+      const origin = (item.origin as Record<string, unknown>) || {};
 
       return {
         id: item.id,
@@ -53,22 +54,22 @@ export async function GET() {
         createdAt: item.createdAt.toISOString(),
         tenantName: item.tenant?.displayName || item.tenant?.legalName || "Tienda Desconocida",
         recipient: {
-          name: recipient.name || "Sin nombre",
-          phone: recipient.phone || "",
+          name: (recipient.name as string) || "Sin nombre",
+          phone: (recipient.phone as string) || "",
         },
         sender: {
-          name: (item.origin as any)?.name || "",
-          city: (item.origin as any)?.city || "",
+          name: (origin.name as string) || "",
+          city: (origin.city as string) || "",
         },
         address: {
-          city: address.city || "",
-          line1: address.line1 || "",
+          city: (address.city as string) || "",
+          line1: (address.line1 as string) || "",
         },
-        packages: packages.map((pkg: any) => ({
-          description: pkg.description || "Paquete",
-          quantity: pkg.quantity || 1,
-          weightKg: pkg.weightKg || 0,
-          declaredValue: pkg.declaredValueMinor ? pkg.declaredValueMinor / 100 : 0,
+        packages: packages.map((pkg: Record<string, unknown>) => ({
+          description: (pkg.description as string) || "Paquete",
+          quantity: (pkg.quantity as number) || 1,
+          weightKg: (pkg.weightKg as number) || 0,
+          declaredValue: pkg.declaredValueMinor ? (pkg.declaredValueMinor as number) / 100 : 0,
         })),
       };
     });

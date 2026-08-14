@@ -4,8 +4,6 @@ import { z } from "zod";
 import { getPrisma } from "../../../lib/prisma";
 import { requireTenant, tenantError } from "../../../lib/tenant";
 import {
-  createCarrierLabel,
-  quoteRequestHash,
   verifyQuote,
 } from "../../../lib/integrations/carrier-gateway";
 import { createLaarShipment } from "../../../lib/integrations/laar-client";
