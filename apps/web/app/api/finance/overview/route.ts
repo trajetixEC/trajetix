@@ -7,12 +7,16 @@ export async function GET() {
   try {
     const { tenantId } = await requireTenant("finance:read");
     const prisma = getPrisma();
+
+    // 1. Get or create tenant wallet
     const wallet = await prisma.wallet.upsert({
       where: { tenantId },
       update: {},
       create: { tenantId },
     });
-    const [transactions, accounts, withdrawals] = await Promise.all([
+
+    // 2. Fetch parallel financial metrics including recharges
+    const [transactions, accounts, withdrawals, activeCodShipments, pendingWithdrawals, recharges] = await Promise.all([
       prisma.walletTransaction.findMany({
         where: { tenantId },
         orderBy: { createdAt: "desc" },
@@ -30,16 +34,57 @@ export async function GET() {
         orderBy: { createdAt: "desc" },
         take: 100,
       }),
+      // Active COD shipments in transit (pending collection)
+      prisma.shipment.findMany({
+        where: {
+          tenantId,
+          codMinor: { gt: 0 },
+          status: { in: ["LABEL_CREATED", "PICKUP_SCHEDULED", "IN_TRANSIT", "OUT_FOR_DELIVERY", "EXCEPTION"] },
+        },
+        select: { codMinor: true },
+      }),
+      // Withdrawals waiting for admin approval (blocked funds)
+      prisma.withdrawal.findMany({
+        where: { tenantId, status: "PENDING" },
+        select: { amountMinor: true },
+      }),
+      // Recharge requests submitted by store
+      prisma.walletRecharge.findMany({
+        where: { tenantId },
+        orderBy: { createdAt: "desc" },
+        take: 100,
+      }),
     ]);
+
+    // 3. Compute the 3 exact balances (in dollars)
+    const availableMinor = Number(wallet.balanceMinor ?? 0);
+    const pendingCodMinor = activeCodShipments.reduce((sum, s) => sum + Number(s.codMinor ?? 0), 0);
+    const blockedMinor = pendingWithdrawals.reduce((sum, w) => sum + Number(w.amountMinor ?? 0), 0);
+
+    const availableBalance = availableMinor / 100;
+    const pendingBalance = pendingCodMinor / 100;
+    const blockedBalance = blockedMinor / 100;
+    const availableForWithdrawal = Math.max(0, availableBalance);
+
     return Response.json({
       wallet: {
-        balance: Number(wallet.balanceMinor) / 100,
+        balance: availableBalance, // Backward compatibility
+        available: availableBalance,
+        pending: pendingBalance,
+        blocked: blockedBalance,
+        availableForWithdrawal,
         currency: wallet.currency,
       },
       transactions: transactions.map((item) => ({
-        ...item,
-        amountMinor: undefined,
+        id: item.id,
+        type: item.type,
         amount: Number(item.amountMinor) / 100,
+        balanceBefore: item.balanceBeforeMinor !== null ? Number(item.balanceBeforeMinor) / 100 : null,
+        balanceAfter: item.balanceAfterMinor !== null ? Number(item.balanceAfterMinor) / 100 : null,
+        description: item.description,
+        referenceType: item.referenceType,
+        referenceId: item.referenceId,
+        createdAt: item.createdAt,
       })),
       accounts: accounts.map((item) => ({
         id: item.id,
@@ -57,8 +102,18 @@ export async function GET() {
         status: item.status,
         note: item.note,
         createdAt: item.createdAt,
-        bankName: item.bankAccount.bankName,
-        accountLast4: item.bankAccount.accountLast4,
+        bankName: item.bankAccount?.bankName || "Banco",
+        accountLast4: item.bankAccount?.accountLast4 || "****",
+      })),
+      recharges: recharges.map((item) => ({
+        id: item.id,
+        amount: Number(item.amountMinor) / 100,
+        bankName: item.bankName,
+        referenceNumber: item.referenceNumber,
+        receiptUrl: item.receiptUrl,
+        status: item.status,
+        note: item.note,
+        createdAt: item.createdAt,
       })),
     });
   } catch (error) {

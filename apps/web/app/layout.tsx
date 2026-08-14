@@ -28,7 +28,7 @@ export default function RootLayout({
       <head>
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var a=localStorage.getItem('trajetix-appearance')||'DARK';var l=a==='LIGHT'||(a==='SYSTEM'&&matchMedia('(prefers-color-scheme: light)').matches);document.documentElement.dataset.theme=l?'light':'dark'}catch(e){document.documentElement.dataset.theme='dark'}})()`,
+            __html: `(function(){try{var a=localStorage.getItem('trajetix-appearance')||'LIGHT';var isLight=a==='LIGHT'||(a==='SYSTEM'&&matchMedia('(prefers-color-scheme: light)').matches);document.documentElement.dataset.theme=isLight?'light':'dark';if(isLight){document.documentElement.classList.remove('dark');document.documentElement.classList.add('light')}else{document.documentElement.classList.add('dark');document.documentElement.classList.remove('light')}}catch(e){document.documentElement.dataset.theme='light'}})()`,
           }}
         />
       </head>

@@ -7,6 +7,7 @@ import { signOut } from "next-auth/react";
 import { can, type Permission } from "../../lib/rbac";
 import { FulfillmentModule, IntegrationsModule } from "./operations-modules";
 import {
+  CustomerShipmentsModule,
   MyShipmentsModule,
   NewShipmentModule,
   TrackingModule,
@@ -16,6 +17,9 @@ import { CarrierConfigModal } from "./carrier-config-modal";
 import { ProfileModule } from "./profile-module";
 import { ReferralsModule } from "./referrals-module";
 import { TopbarWallet } from "./topbar-wallet";
+import { GoogleMapPicker } from "./google-map-picker";
+import { CitySelect } from "./city-select";
+import { Pencil, Trash2, AlertTriangle, X, Loader2, AlertCircle, CheckCircle2, Info, DollarSign, Package } from "lucide-react";
 
 type Product = {
   id: string;
@@ -88,6 +92,7 @@ type Section =
   | "Dashboard"
   | "Nuevo envío"
   | "Mis envíos"
+  | "Envíos Clientes"
   | "Tracking"
   | "Clientes"
   | "Bodegas"
@@ -114,10 +119,18 @@ const menu: {
   permissions: Permission[];
   group: "PLATAFORMA" | "CLIENTES" | "STOCK & BODEGAS" | "FINANZAS" | "CRECIMIENTO" | "ADMINISTRACIÓN";
   ownerOnly?: boolean;
+  superAdminOnly?: boolean;
 }[] = [
   { label: "Dashboard", icon: "⌂", permissions: ["dashboard:read"], group: "PLATAFORMA" },
   { label: "Nuevo envío", icon: "＋", permissions: ["shipments:create"], group: "PLATAFORMA" },
   { label: "Mis envíos", icon: "▣", permissions: ["shipments:read"], group: "PLATAFORMA" },
+  {
+    label: "Envíos Clientes",
+    icon: "📦",
+    permissions: ["shipments:read"],
+    group: "PLATAFORMA",
+    superAdminOnly: true,
+  },
   { label: "Tracking", icon: "⌖", permissions: ["shipments:read"], group: "PLATAFORMA" },
   { label: "Clientes", icon: "◎", permissions: ["customers:read"], group: "CLIENTES" },
   { label: "Bodegas", icon: "▤", permissions: ["warehouses:read"], group: "STOCK & BODEGAS" },
@@ -143,7 +156,7 @@ const menu: {
     icon: "🚛",
     permissions: ["settings:read"],
     group: "ADMINISTRACIÓN",
-    ownerOnly: true,
+    superAdminOnly: true,
   },
   { label: "Integraciones", icon: "⌘", permissions: ["settings:read"], group: "ADMINISTRACIÓN" },
 ];
@@ -158,18 +171,24 @@ const menuGroups = [
 ] as const;
 
 function isOwnerRole(role: string) {
-  return ["owner", "propietario"].includes(role.toLowerCase());
+  const r = role.toLowerCase();
+  return r.includes("owner") || r.includes("propietario") || r.includes("super");
+}
+
+function isSuperAdminRole(role: string) {
+  const r = role.toLowerCase();
+  return r.includes("superadmin") || r.includes("super");
 }
 
 function canOpenMenuItem(
   item: (typeof menu)[number],
   permissions: readonly string[],
   owner: boolean,
+  superAdmin: boolean,
 ) {
-  return (
-    (!item.ownerOnly || owner) &&
-    item.permissions.some((permission) => can(permissions, permission))
-  );
+  if (item.superAdminOnly && !superAdmin) return false;
+  if (item.ownerOnly && !owner && !superAdmin) return false;
+  return item.permissions.some((permission) => can(permissions, permission));
 }
 const money = new Intl.NumberFormat("es-EC", {
   style: "currency",
@@ -177,11 +196,22 @@ const money = new Intl.NumberFormat("es-EC", {
 });
 
 function applyAppearance(value: "LIGHT" | "DARK" | "SYSTEM") {
-  const systemLight = window.matchMedia(
-    "(prefers-color-scheme: light)",
-  ).matches;
-  document.documentElement.dataset.theme =
-    value === "SYSTEM" ? (systemLight ? "light" : "dark") : value.toLowerCase();
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem("trajetix-appearance", value);
+  } catch (e) {}
+
+  const systemLight = window.matchMedia("(prefers-color-scheme: light)").matches;
+  const isLight = value === "LIGHT" || (value === "SYSTEM" && systemLight);
+
+  document.documentElement.dataset.theme = isLight ? "light" : "dark";
+  if (isLight) {
+    document.documentElement.classList.remove("dark");
+    document.documentElement.classList.add("light");
+  } else {
+    document.documentElement.classList.add("dark");
+    document.documentElement.classList.remove("light");
+  }
 }
 
 export function DashboardApp({
@@ -190,17 +220,22 @@ export function DashboardApp({
   user: { name: string; role: string; tenant: string; permissions: string[] };
 }) {
   const owner = isOwnerRole(user.role);
+  const superAdmin = isSuperAdminRole(user.role);
   const [account, setAccount] = useState({
     name: user.name,
     tenant: user.tenant,
   });
   const [accountMenu, setAccountMenu] = useState(false);
-  const [appearance, setAppearance] = useState<"LIGHT" | "DARK" | "SYSTEM">(
-    "DARK",
-  );
+  const [appearance, setAppearance] = useState<"LIGHT" | "DARK" | "SYSTEM">(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("trajetix-appearance");
+      if (saved === "LIGHT" || saved === "DARK" || saved === "SYSTEM") return saved;
+    }
+    return "LIGHT";
+  });
   const [section, setSection] = useState<Section>(
     () =>
-      menu.find((item) => canOpenMenuItem(item, user.permissions, owner))
+      menu.find((item) => canOpenMenuItem(item, user.permissions, owner, superAdmin))
         ?.label ?? "Dashboard",
   );
   const [store, setStore] = useState<Store>(emptyStore);
@@ -211,7 +246,43 @@ export function DashboardApp({
     "product" | "customer" | "shipment" | "warehouse" | null
   >(null);
   const [adjustProduct, setAdjustProduct] = useState<Product | null>(null);
+  const [editingWarehouse, setEditingWarehouse] = useState<Warehouse | null>(null);
+  const [deletingWarehouse, setDeletingWarehouse] = useState<Warehouse | null>(null);
   const [isCarriersModalOpen, setIsCarriersModalOpen] = useState(false);
+
+  const editWarehouse = async (id: string, payload: Record<string, unknown>) => {
+    const response = await fetch(`/api/warehouses/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!response.ok) {
+      const body = (await response.json().catch(() => ({}))) as {
+        error?: string;
+      };
+      setNotice(body.error ?? "No se pudo actualizar la bodega");
+      return false;
+    }
+    await loadOperationalData();
+    setNotice("Bodega actualizada exitosamente");
+    return true;
+  };
+
+  const deleteWarehouse = async (id: string) => {
+    const response = await fetch(`/api/warehouses/${id}`, {
+      method: "DELETE",
+    });
+    if (!response.ok) {
+      const body = (await response.json().catch(() => ({}))) as {
+        error?: string;
+      };
+      setNotice(body.error ?? "No se pudo desactivar la bodega");
+      return false;
+    }
+    await loadOperationalData();
+    setNotice("Bodega desactivada correctamente");
+    return true;
+  };
 
   const loadOperationalData = useCallback(async () => {
     const tasks: Promise<void>[] = [];
@@ -380,7 +451,7 @@ export function DashboardApp({
             const items = menu.filter(
               (item) =>
                 item.group === group &&
-                canOpenMenuItem(item, user.permissions, owner),
+                canOpenMenuItem(item, user.permissions, owner, superAdmin),
             );
             if (items.length === 0) return null;
             return (
@@ -539,6 +610,8 @@ export function DashboardApp({
               warehouses={store.warehouses}
               query={query}
               onCreate={() => setCreateEntity("warehouse")}
+              onEdit={(warehouse) => setEditingWarehouse(warehouse)}
+              onDelete={(warehouse) => setDeletingWarehouse(warehouse)}
             />
           )}
           {section === "Inventario" && (
@@ -551,6 +624,7 @@ export function DashboardApp({
           )}
           {section === "Nuevo envío" && (
             <NewShipmentModule
+              user={user}
               warehouses={store.warehouses}
               products={store.products}
               onCreated={async () => {
@@ -567,6 +641,7 @@ export function DashboardApp({
               onNew={() => setSection("Nuevo envío")}
             />
           )}
+          {section === "Envíos Clientes" && <CustomerShipmentsModule />}
           {section === "Tracking" && <TrackingModule />}
           {section === "Fulfillment" && (
             <FulfillmentModule
@@ -679,6 +754,52 @@ export function DashboardApp({
           onClose={() => setAdjustProduct(null)}
           onSubmit={adjustStock}
         />
+      )}
+      {editingWarehouse && (
+        <EditWarehouseModal
+          warehouse={editingWarehouse}
+          onClose={() => setEditingWarehouse(null)}
+          onSave={editWarehouse}
+        />
+      )}
+      {deletingWarehouse && (
+        <div className="modal-backdrop" onClick={() => setDeletingWarehouse(null)}>
+          <div
+            className="modal-card max-w-md w-full"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-red-600 font-bold text-lg mb-2 flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0" />
+              <span>¿Desactivar Bodega?</span>
+            </h3>
+            <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed mb-4">
+              ¿Estás seguro de desactivar la bodega{" "}
+              <strong className="text-slate-900 dark:text-slate-100">
+                {deletingWarehouse.name} ({deletingWarehouse.code})
+              </strong>
+              ? La bodega no se eliminará permanentemente de la base de datos, pero quedará desactivada y ya no se mostrará en el sistema ni para nuevos despachos.
+            </p>
+            <div className="modal-actions flex items-center justify-end gap-2 pt-3 border-t border-slate-200 dark:border-slate-800">
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => setDeletingWarehouse(null)}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-semibold text-xs rounded-lg transition-colors shadow-sm"
+                onClick={async () => {
+                  const ok = await deleteWarehouse(deletingWarehouse.id);
+                  if (ok) setDeletingWarehouse(null);
+                }}
+              >
+                Sí, Desactivar
+              </button>
+            </div>
+          </div>
+        </div>
       )}
       {notice && (
         <div className="toast">
@@ -1283,10 +1404,14 @@ function Warehouses({
   warehouses,
   query,
   onCreate,
+  onEdit,
+  onDelete,
 }: {
   warehouses: Warehouse[];
   query: string;
   onCreate: () => void;
+  onEdit: (warehouse: Warehouse) => void;
+  onDelete: (warehouse: Warehouse) => void;
 }) {
   const filtered = warehouses.filter((warehouse) =>
     `${warehouse.name} ${warehouse.code} ${warehouse.city}`
@@ -1325,13 +1450,33 @@ function Warehouses({
       </section>
       <div className="warehouse-grid">
         {filtered.map((warehouse) => (
-          <article className="warehouse-card" key={warehouse.id}>
-            <span className="warehouse-code">{warehouse.code}</span>
+          <article className="warehouse-card relative group" key={warehouse.id}>
+            <div className="flex items-center justify-between mb-2">
+              <span className="warehouse-code">{warehouse.code}</span>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  title="Editar bodega"
+                  aria-label="Editar bodega"
+                  onClick={() => onEdit(warehouse)}
+                  className="p-1.5 text-slate-500 hover:text-blue-600 dark:text-slate-400 dark:hover:text-blue-400 bg-slate-100 hover:bg-blue-50 dark:bg-slate-800/80 dark:hover:bg-blue-950/60 rounded-lg border border-slate-200 dark:border-slate-700/80 transition-colors shadow-sm"
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  type="button"
+                  title="Desactivar bodega"
+                  aria-label="Desactivar bodega"
+                  onClick={() => onDelete(warehouse)}
+                  className="p-1.5 text-slate-500 hover:text-red-600 dark:text-slate-400 dark:hover:text-red-400 bg-slate-100 hover:bg-red-50 dark:bg-slate-800/80 dark:hover:bg-red-950/60 rounded-lg border border-slate-200 dark:border-slate-700/80 transition-colors shadow-sm"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
             <h2>{warehouse.name}</h2>
             <p>{warehouse.address}</p>
-            <small>
-              {warehouse.city} · {warehouse.timezone}
-            </small>
+            <small>{warehouse.city}</small>
             <div>
               <span>
                 <b>{warehouse.products}</b> productos
@@ -1352,6 +1497,110 @@ function Warehouses({
         </div>
       )}
     </>
+  );
+}
+
+function EditWarehouseModal({
+  warehouse,
+  onClose,
+  onSave,
+}: {
+  warehouse: Warehouse;
+  onClose: () => void;
+  onSave: (id: string, payload: Record<string, unknown>) => Promise<boolean>;
+}) {
+  const [city, setCity] = useState(warehouse.city || "");
+  const [address, setAddress] = useState(warehouse.address || "");
+  const [saving, setSaving] = useState(false);
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const payload: Record<string, unknown> = Object.fromEntries(form.entries());
+    payload.latitude = Number(payload.latitude || 0);
+    payload.longitude = Number(payload.longitude || 0);
+    setSaving(true);
+    try {
+      const ok = await onSave(warehouse.id, payload);
+      if (ok) onClose();
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div
+        className="modal-card max-w-lg w-full"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3 mb-4">
+          <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">
+            Editar Bodega: <span className="font-mono text-red-500">{warehouse.code}</span>
+          </h3>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Cerrar modal"
+            className="p-1 rounded-md text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <label className="mb-3 block text-xs font-semibold text-slate-700 dark:text-slate-200">
+            Nombre de la Bodega <span className="text-red-500">*</span>
+            <input
+              name="name"
+              required
+              autoFocus
+              defaultValue={warehouse.name}
+              placeholder="ej. Bodega Quito Norte"
+            />
+          </label>
+
+          <div className="mb-3">
+            <CitySelect
+              label="Ciudad / Cantón"
+              value={city}
+              onChange={(cityName) => setCity(cityName)}
+              showBadges={false}
+              required={true}
+              name="city"
+              placeholder="Busca y selecciona la ciudad de la bodega..."
+            />
+          </div>
+
+          <label className="mb-3 block text-xs font-semibold text-slate-700 dark:text-slate-200">
+            Dirección Exacta <span className="text-red-500">*</span>
+            <input
+              name="address"
+              required
+              defaultValue={address}
+              onChange={(e) => setAddress(e.target.value)}
+              placeholder="Calle, número y referencia"
+            />
+          </label>
+
+          <GoogleMapPicker address={address} city={city} />
+
+          <div className="modal-actions mt-4 flex items-center justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={onClose}
+              disabled={saving}
+            >
+              Cancelar
+            </button>
+            <button type="submit" className="primary-button" disabled={saving}>
+              {saving ? "Guardando..." : "Guardar Cambios"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
   );
 }
 function Customers({
@@ -1540,28 +1789,79 @@ function EntityModal({
   const [saving, setSaving] = useState(false);
   const [productImage, setProductImage] = useState<string | undefined>();
   const [imageError, setImageError] = useState("");
+  const [costVal, setCostVal] = useState("0");
+  const [priceVal, setPriceVal] = useState("0");
   const [dropshippingPrice, setDropshippingPrice] = useState("");
   const [suggestedDropshippingPrice, setSuggestedDropshippingPrice] =
     useState("");
   const [suggestedPriceEdited, setSuggestedPriceEdited] = useState(false);
+  const [productFormError, setProductFormError] = useState("");
+  const [warehouseCity, setWarehouseCity] = useState("Quito");
+  const [warehouseAddress, setWarehouseAddress] = useState("");
+  const [markerAnchor, setMarkerAnchor] = useState<[number, number]>([-0.1807, -78.4678]);
   const titles = {
     product: "Nuevo producto",
     customer: "Nuevo cliente",
     shipment: "Nuevo envío",
     warehouse: "Registrar bodega",
   } as const;
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    setProductFormError("");
     const form = new FormData(event.currentTarget);
     const payload: Record<string, unknown> = Object.fromEntries(form.entries());
     if (kind === "product") {
+      const sku = String(payload.sku || "").trim();
+      const name = String(payload.name || "").trim();
+      const costNum = Number(payload.cost || 0);
+      const priceNum = Number(payload.price || 0);
+      const dropPriceVal = String(payload.dropshippingPrice ?? "").trim();
+      const sugDropPriceVal = String(payload.suggestedDropshippingPrice ?? "").trim();
+      const dropPriceNum = dropPriceVal !== "" ? Number(dropPriceVal) : null;
+      const sugDropPriceNum = sugDropPriceVal !== "" ? Number(sugDropPriceVal) : null;
+
+      const weightNum = Number(payload.weightKg || 0);
+      const lengthNum = Number(payload.lengthCm || 0);
+      const widthNum = Number(payload.widthCm || 0);
+      const heightNum = Number(payload.heightCm || 0);
+
+      if (!sku) {
+        setProductFormError("Ingresa un código SKU para identificar el producto.");
+        return;
+      }
+      if (!name) {
+        setProductFormError("Ingresa el nombre completo del producto.");
+        return;
+      }
+      if (weightNum <= 0) {
+        setProductFormError("El peso del paquete debe ser mayor a 0 kg.");
+        return;
+      }
+      if (lengthNum <= 0 || widthNum <= 0 || heightNum <= 0) {
+        setProductFormError("Las dimensiones del paquete (largo, ancho y alto) deben ser mayores a 0 cm.");
+        return;
+      }
+      if (priceNum < costNum) {
+        setProductFormError(`El precio de venta al público PVP ($${priceNum.toFixed(2)}) no puede ser menor al costo de adquisición ($${costNum.toFixed(2)}).`);
+        return;
+      }
+      if (dropPriceNum !== null && dropPriceNum < costNum) {
+        setProductFormError(`El precio para dropshipping ($${dropPriceNum.toFixed(2)}) no puede ser menor al costo de adquisición ($${costNum.toFixed(2)}).`);
+        return;
+      }
+      if (dropPriceNum !== null && sugDropPriceNum !== null && dropPriceNum > sugDropPriceNum) {
+        setProductFormError(`El precio para dropshipping ($${dropPriceNum.toFixed(2)}) no puede ser mayor al precio sugerido dropshipping ($${sugDropPriceNum.toFixed(2)}).`);
+        return;
+      }
+
       const optionalNumber = (field: string) => {
         const value = String(payload[field] ?? "").trim();
         if (value) payload[field] = Number(value);
         else delete payload[field];
       };
-      payload.cost = Number(payload.cost || 0);
-      payload.price = Number(payload.price || 0);
+      payload.cost = costNum;
+      payload.price = priceNum;
       payload.minimumStock = Number(payload.minimumStock || 0);
       optionalNumber("weightKg");
       optionalNumber("lengthCm");
@@ -1570,11 +1870,21 @@ function EntityModal({
       optionalNumber("dropshippingPrice");
       optionalNumber("suggestedDropshippingPrice");
       if (productImage) payload.imageDataUrl = productImage;
-      payload.trackSerials = form.has("trackSerials");
-      payload.trackLots = form.has("trackLots");
-      payload.trackExpiry = form.has("trackExpiry");
     }
     if (kind === "shipment") payload.cod = Number(payload.cod || 0);
+    if (kind === "warehouse") {
+      payload.latitude = Number(payload.latitude || 0);
+      payload.longitude = Number(payload.longitude || 0);
+      if (!payload.timezone) payload.timezone = "America/Guayaquil";
+      if (!payload.code || !String(payload.code).trim()) {
+        const cityPrefix = String(payload.city || "BOD")
+          .slice(0, 3)
+          .toUpperCase()
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "");
+        payload.code = `${cityPrefix}-${Math.floor(100 + Math.random() * 900)}`;
+      }
+    }
     setSaving(true);
     try {
       await onCreate(kind, payload);
@@ -1600,10 +1910,16 @@ function EntityModal({
         <form onSubmit={submit}>
           {kind === "product" && (
             <>
+              {productFormError && (
+                <div className="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 text-xs flex items-start gap-2 animate-in fade-in slide-in-from-top-1">
+                  <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                  <span className="font-medium leading-relaxed">{productFormError}</span>
+                </div>
+              )}
               <div className="form-row">
                 <label>
-                  SKU
-                  <input name="sku" required autoFocus placeholder="SKU-001" />
+                  SKU <span className="text-red-500">*</span>
+                  <input name="sku" required autoFocus placeholder="ej. PROD-001" />
                 </label>
                 <label>
                   Tipo
@@ -1617,8 +1933,8 @@ function EntityModal({
                 </label>
               </div>
               <label>
-                Nombre
-                <input name="name" required placeholder="Nombre del producto" />
+                Nombre del Producto <span className="text-red-500">*</span>
+                <input name="name" required placeholder="ej. Camiseta Polo Algodón" />
               </label>
               <label>
                 Descripción breve <small>(opcional)</small>
@@ -1626,21 +1942,21 @@ function EntityModal({
                   name="description"
                   maxLength={1000}
                   rows={3}
-                  placeholder="Describe brevemente el producto"
+                  placeholder="Describe brevemente las características principales del producto"
                 />
               </label>
               <div className="form-row">
                 <label>
                   Categoría
-                  <input name="category" />
+                  <input name="category" placeholder="ej. Ropa, Calzado..." />
                 </label>
                 <label>
                   Marca
-                  <input name="brand" />
+                  <input name="brand" placeholder="ej. Nike, Generic..." />
                 </label>
               </div>
               <label>
-                Imagen del producto <small>(opcional)</small>
+                Imagen del producto <small>(máx. 2MB - .webp)</small>
                 <input
                   type="file"
                   accept="image/jpeg,image/png,image/webp"
@@ -1661,10 +1977,10 @@ function EntityModal({
                     reader.readAsDataURL(file);
                   }}
                 />
-                {imageError && <small className="field-error">{imageError}</small>}
+                {imageError && <small className="field-error text-red-500 text-xs mt-1 block">{imageError}</small>}
                 {productImage && (
                   <Image
-                    className="product-image-preview"
+                    className="product-image-preview mt-2 rounded-lg border border-slate-200 dark:border-slate-800"
                     src={productImage}
                     alt="Vista previa del producto"
                     width={96}
@@ -1673,48 +1989,74 @@ function EntityModal({
                   />
                 )}
               </label>
-              <h3 className="form-section-title">Peso y medidas</h3>
+
+              <h3 className="form-section-title text-xs font-bold uppercase tracking-wider text-slate-500 mt-4 mb-2">Peso y Medidas del Paquete</h3>
               <div className="form-row form-row-four">
                 <label>
-                  Peso (kg)
-                  <input name="weightKg" type="number" min="0.001" step="0.001" required />
+                  Peso (kg) <span className="text-red-500">*</span>
+                  <input name="weightKg" type="number" min="0.001" step="0.001" required placeholder="0.5" />
                 </label>
                 <label>
-                  Largo (cm)
-                  <input name="lengthCm" type="number" min="0.01" step="0.01" required />
+                  Largo (cm) <span className="text-red-500">*</span>
+                  <input name="lengthCm" type="number" min="0.01" step="0.01" required placeholder="10" />
                 </label>
                 <label>
-                  Ancho (cm)
-                  <input name="widthCm" type="number" min="0.01" step="0.01" required />
+                  Ancho (cm) <span className="text-red-500">*</span>
+                  <input name="widthCm" type="number" min="0.01" step="0.01" required placeholder="10" />
                 </label>
                 <label>
-                  Alto (cm)
-                  <input name="heightCm" type="number" min="0.01" step="0.01" required />
-                </label>
-              </div>
-              <h3 className="form-section-title">Precios</h3>
-              <div className="form-row">
-                <label>
-                  Costo (USD)
-                  <input name="cost" type="number" min="0" step="0.01" required defaultValue="0" />
-                </label>
-                <label>
-                  Precio de venta al público PVP (USD)
-                  <input name="price" type="number" min="0" step="0.01" required defaultValue="0" />
+                  Alto (cm) <span className="text-red-500">*</span>
+                  <input name="heightCm" type="number" min="0.01" step="0.01" required placeholder="5" />
                 </label>
               </div>
+
+              <h3 className="form-section-title text-xs font-bold uppercase tracking-wider text-slate-500 mt-4 mb-2">Precios y Márgenes</h3>
               <div className="form-row">
                 <label>
-                  Precio para dropshipping (USD) <small>(opcional)</small>
+                  Costo de Adquisición (USD) <span className="text-red-500">*</span>
+                  <input
+                    name="cost"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    required
+                    value={costVal}
+                    onChange={(e) => setCostVal(e.target.value)}
+                  />
+                </label>
+                <label>
+                  Precio Venta al Público PVP (USD) <span className="text-red-500">*</span>
+                  <input
+                    name="price"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    required
+                    value={priceVal}
+                    onChange={(e) => setPriceVal(e.target.value)}
+                  />
+                  {Number(priceVal) > 0 && (
+                    <small className="field-help font-medium text-emerald-600 dark:text-emerald-400 mt-1 block">
+                      Ganancia estimada: +${(Number(priceVal) - Number(costVal)).toFixed(2)} ({Number(priceVal) > 0 ? (((Number(priceVal) - Number(costVal)) / Number(priceVal)) * 100).toFixed(1) : 0}% margen)
+                    </small>
+                  )}
+                </label>
+              </div>
+
+              <div className="form-row">
+                <label>
+                  Precio para Dropshipping (USD) <small>(opcional)</small>
                   <input
                     name="dropshippingPrice"
                     type="number"
                     min="0"
                     step="0.01"
                     value={dropshippingPrice}
+                    placeholder="Precio al revendedor"
                     onChange={(event) => {
                       const value = event.currentTarget.value;
                       setDropshippingPrice(value);
+                      setProductFormError("");
                       if (!suggestedPriceEdited) {
                         const amount = Number(value);
                         setSuggestedDropshippingPrice(
@@ -1727,42 +2069,41 @@ function EntityModal({
                   />
                 </label>
                 <label>
-                  Precio sugerido dropshipping (USD) <small>(opcional)</small>
+                  Precio Sugerido Dropshipping (USD) <small>(opcional)</small>
                   <input
                     name="suggestedDropshippingPrice"
                     type="number"
                     min="0"
                     step="0.01"
                     value={suggestedDropshippingPrice}
+                    placeholder="PVP sugerido al cliente final"
                     onChange={(event) => {
                       setSuggestedPriceEdited(true);
                       setSuggestedDropshippingPrice(event.currentTarget.value);
+                      setProductFormError("");
                     }}
                   />
-                  <small className="field-help">
-                    Margen estimado del revendedor: USD 5,00.
-                  </small>
+                  {dropshippingPrice !== "" && suggestedDropshippingPrice !== "" && (
+                    <small
+                      className={`field-help font-medium mt-1 block ${
+                        Number(dropshippingPrice) > Number(suggestedDropshippingPrice)
+                          ? "text-red-500"
+                          : "text-blue-600 dark:text-blue-400"
+                      }`}
+                    >
+                      {Number(dropshippingPrice) > Number(suggestedDropshippingPrice)
+                        ? "⚠️ El precio para dropshipping supera al sugerido"
+                        : `Ganancia revendedor: +$${(Number(suggestedDropshippingPrice) - Number(dropshippingPrice)).toFixed(2)}`}
+                    </small>
+                  )}
                 </label>
               </div>
+
               <div className="form-row">
                 <label>
-                  Código de barras
-                  <input name="barcode" />
-                </label>
-                <label>
-                  Stock mínimo
+                  Stock Mínimo
                   <input name="minimumStock" type="number" min="0" step="1" defaultValue="0" />
-                </label>
-              </div>
-              <div className="permission-list">
-                <label>
-                  <input name="trackSerials" type="checkbox" /> Series
-                </label>
-                <label>
-                  <input name="trackLots" type="checkbox" /> Lotes
-                </label>
-                <label>
-                  <input name="trackExpiry" type="checkbox" /> Caducidad
+                  <small className="field-help text-slate-400 mt-1 block">Alerta cuando el inventario caiga de este número.</small>
                 </label>
               </div>
             </>
@@ -1856,40 +2197,41 @@ function EntityModal({
           )}
           {kind === "warehouse" && (
             <>
-              <div className="form-row">
-                <label>
-                  Código
-                  <input name="code" required autoFocus placeholder="UIO-01" />
-                </label>
-                <label>
-                  Nombre
-                  <input
-                    name="name"
-                    required
-                    placeholder="Bodega Quito Norte"
-                  />
-                </label>
-              </div>
-              <label>
-                Ciudad
-                <input name="city" required placeholder="Quito" />
+              <label className="mb-3 block text-xs font-semibold text-slate-700 dark:text-slate-200">
+                Nombre de la Bodega <span className="text-red-500">*</span>
+                <input
+                  name="name"
+                  required
+                  autoFocus
+                  placeholder="ej. Bodega Quito Norte, Matriz Guayaquil..."
+                />
               </label>
-              <label>
-                Dirección
+
+              <div className="mb-3">
+                <CitySelect
+                  label="Ciudad / Cantón"
+                  value={warehouseCity}
+                  onChange={(cityName) => setWarehouseCity(cityName)}
+                  showBadges={false}
+                  required={true}
+                  name="city"
+                  placeholder="Busca y selecciona la ciudad de la bodega..."
+                />
+              </div>
+
+              <label className="mb-3 block text-xs font-semibold text-slate-700 dark:text-slate-200">
+                Dirección Exacta <span className="text-red-500">*</span>
                 <input
                   name="address"
                   required
                   placeholder="Calle, número y referencia"
+                  value={warehouseAddress}
+                  onChange={(e) => setWarehouseAddress(e.target.value)}
                 />
               </label>
-              <label>
-                Zona horaria
-                <select name="timezone" defaultValue="America/Guayaquil">
-                  <option>America/Guayaquil</option>
-                  <option>America/Bogota</option>
-                  <option>America/Lima</option>
-                </select>
-              </label>
+
+              {/* OFFICIAL GOOGLE MAPS COMPONENT */}
+              <GoogleMapPicker address={warehouseAddress} city={warehouseCity} />
             </>
           )}
           <div className="modal-actions">
@@ -1900,8 +2242,15 @@ function EntityModal({
             >
               Cancelar
             </button>
-            <button className="primary-button" disabled={saving} type="submit">
-              {saving ? "Guardando…" : "Guardar"}
+            <button className="primary-button flex items-center gap-2 justify-center" disabled={saving} type="submit">
+              {saving ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Guardando...
+                </>
+              ) : (
+                "Guardar"
+              )}
             </button>
           </div>
         </form>

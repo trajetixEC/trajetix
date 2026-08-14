@@ -4,5 +4,11 @@
   "installCommand": "corepack enable && pnpm install --frozen-lockfile",
   "buildCommand": "pnpm turbo build --filter=@trajetix/web",
   "outputDirectory": "apps/web/.next",
-  "regions": ["iad1"]
+  "regions": ["iad1"],
+  "crons": [
+    {
+      "path": "/api/cron/sync-shipments",
+      "schedule": "0 * * * *"
+    }
+  ]
 }

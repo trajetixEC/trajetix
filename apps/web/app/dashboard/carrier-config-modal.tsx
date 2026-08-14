@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { CitySelect } from "./city-select";
 import {
   CarrierConfig,
   ZoneKey,
@@ -24,6 +25,7 @@ export function CarrierConfigModal({ isOpen, onClose, onSaved }: CarrierConfigMo
   // Live Rate Simulator state
   const [simOrigin, setSimOrigin] = useState("Quito");
   const [simDest, setSimDest] = useState("Guayaquil");
+  const [simDestZone, setSimDestZone] = useState<ZoneKey | undefined>(undefined);
   const [simWeight, setSimWeight] = useState(3);
   const [simCod, setSimCod] = useState(60);
   const [simZeroMargin, setSimZeroMargin] = useState(false);
@@ -70,6 +72,7 @@ export function CarrierConfigModal({ isOpen, onClose, onSaved }: CarrierConfigMo
     config,
     originCity: simOrigin,
     destinationCity: simDest,
+    ...(simDestZone ? { destinationZone: simDestZone } : {}),
     weightKg: simWeight,
     codAmount: simCod,
     isZeroMarginUser: simZeroMargin,
@@ -143,14 +146,14 @@ export function CarrierConfigModal({ isOpen, onClose, onSaved }: CarrierConfigMo
             className={activeTab === "general" ? "active" : ""}
             onClick={() => setActiveTab("general")}
           >
-            📋 1. Información General
+            📋 1. General
           </button>
           <button
             type="button"
             className={activeTab === "pickup" ? "active" : ""}
             onClick={() => setActiveTab("pickup")}
           >
-            🚛 2. Recolección y Entrega
+            🚛 2. Recolección
           </button>
           <button
             type="button"
@@ -164,7 +167,7 @@ export function CarrierConfigModal({ isOpen, onClose, onSaved }: CarrierConfigMo
             className={activeTab === "coverage" ? "active" : ""}
             onClick={() => setActiveTab("coverage")}
           >
-            🗺️ 4. Cobertura y Localidades
+            🗺️ 4. Cobertura
           </button>
         </nav>
 
@@ -586,68 +589,133 @@ export function CarrierConfigModal({ isOpen, onClose, onSaved }: CarrierConfigMo
                 </label>
               </div>
 
-              <h4>3. Simulador de Cotización en Tiempo Real</h4>
-              <div className="simulator-panel">
-                <div className="sim-inputs">
-                  <label>
-                    Origen
-                    <input value={simOrigin} onChange={(e) => setSimOrigin(e.target.value)} />
-                  </label>
-                  <label>
-                    Destino
-                    <input value={simDest} onChange={(e) => setSimDest(e.target.value)} />
-                  </label>
-                  <label>
-                    Peso (kg)
-                    <input
-                      type="number"
-                      min="1"
-                      value={simWeight}
-                      onChange={(e) => setSimWeight(Number(e.target.value))}
-                    />
-                  </label>
-                  <label>
-                    Recaudo COD ($)
-                    <input
-                      type="number"
-                      min="0"
-                      value={simCod}
-                      onChange={(e) => setSimCod(Number(e.target.value))}
-                    />
-                  </label>
-                  <label className="checkbox-item sim-check">
+              <h4 className="text-sm font-bold text-slate-900 dark:text-white mt-6 mb-3">
+                3. Simulador de Cotización en Tiempo Real
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100 p-5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+                <div className="flex flex-col gap-3">
+                  <CitySelect
+                    label="Ciudad de Origen"
+                    value={simOrigin}
+                    onChange={(city) => setSimOrigin(city)}
+                    placeholder="Selecciona origen (ej. Quito)..."
+                  />
+
+                  <CitySelect
+                    label="Ciudad de Destino"
+                    value={simDest}
+                    onChange={(city, loc) => {
+                      setSimDest(city);
+                      setSimDestZone(loc?.laarZone as ZoneKey | undefined);
+                    }}
+                    placeholder="Selecciona destino (ej. Guayaquil, Atacames)..."
+                  />
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-200">
+                      Peso (kg)
+                      <input
+                        type="number"
+                        min="1"
+                        value={simWeight}
+                        onChange={(e) => setSimWeight(Number(e.target.value))}
+                        className="w-full mt-1.5 p-2 text-xs bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white font-mono shadow-sm"
+                      />
+                    </label>
+
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-200">
+                      Recaudo COD ($)
+                      <input
+                        type="number"
+                        min="0"
+                        value={simCod}
+                        onChange={(e) => setSimCod(Number(e.target.value))}
+                        className="w-full mt-1.5 p-2 text-xs bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white font-mono shadow-sm"
+                      />
+                    </label>
+                  </div>
+
+                  <label className="text-xs text-slate-600 dark:text-slate-300 font-medium flex items-center gap-2 mt-2 cursor-pointer select-none">
                     <input
                       type="checkbox"
                       checked={simZeroMargin}
                       onChange={(e) => setSimZeroMargin(e.target.checked)}
+                      className="rounded border-slate-300 dark:border-slate-700 text-red-500"
                     />
                     Ver como usuario sin margen (0% Ganancia)
                   </label>
                 </div>
 
-                <div className="sim-results">
-                  <div className="sim-badge">Zona detectada: {simResult.zoneName}</div>
-                  <div className="sim-row">
-                    <span>Costo Flete LAAR:</span>
-                    <strong>${simResult.laarFreightCost.toFixed(2)}</strong>
-                  </div>
-                  <div className="sim-row">
-                    <span>Costo COD LAAR:</span>
-                    <strong>${simResult.laarCodCost.toFixed(2)}</strong>
-                  </div>
-                  <div className="sim-row highlight-subtotal">
-                    <span>Costo Total LAAR (A pagar a courier):</span>
-                    <strong>${simResult.laarTotalCost.toFixed(2)}</strong>
-                  </div>
-                  <div className="sim-row profit-row">
-                    <span>
-                      Margen Ganancia Trajetix {simResult.isZeroMarginApplied ? "(Exento 0%)" : ""}:
+                {/* Panel de ResultadosAdaptado a Tema Claro / Oscuro */}
+                <div className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-5 text-slate-900 dark:text-slate-100 flex flex-col gap-4 shadow-sm">
+                  {/* Trayecto / Zona Detectada */}
+                  <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+                    <span className="text-xs text-slate-600 dark:text-slate-300 font-semibold">Trayecto Detectado:</span>
+                    <span className={`px-3 py-1 rounded-full text-xs font-extrabold uppercase tracking-wider font-mono ${
+                      simResult.zoneKey === "local"
+                        ? "bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800"
+                        : simResult.zoneKey === "principal"
+                        ? "bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800"
+                        : simResult.zoneKey === "secundario"
+                        ? "bg-purple-50 dark:bg-purple-950 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800"
+                        : simResult.zoneKey === "oriente"
+                        ? "bg-pink-50 dark:bg-pink-950 text-pink-700 dark:text-pink-300 border border-pink-200 dark:border-pink-800"
+                        : "bg-amber-50 dark:bg-amber-950 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800"
+                    }`}>
+                      {simResult.zoneKey === "local"
+                        ? "LOCAL (Misma Ciudad)"
+                        : `NACIONAL / ${simResult.zoneName}`}
                     </span>
-                    <strong className="profit-text">+${simResult.trajetixProfitTotal.toFixed(2)}</strong>
                   </div>
-                  <div className="sim-row final-total">
-                    <span>Precio Final en &quot;Nuevo Envío&quot;:</span>
-                    <strong className="final-price">${simResult.finalPriceToClient.toFixed(2)}</strong>
+
+                  {/* Desglose Tarifas LAAR */}
+                  <div className="space-y-2 text-xs">
+                    <div className="flex items-center justify-between text-slate-600 dark:text-slate-300">
+                      <span>Flete Base Courier ({simWeight} kg):</span>
+                      <strong className="font-mono text-slate-900 dark:text-white text-xs">${simResult.laarFreightCost.toFixed(2)}</strong>
+                    </div>
+                    {simCod > 0 && (
+                      <div className="flex items-center justify-between text-slate-600 dark:text-slate-300">
+                        <span>Comisión COD Courier (${simCod}):</span>
+                        <strong className="font-mono text-slate-900 dark:text-white text-xs">${simResult.laarCodCost.toFixed(2)}</strong>
+                      </div>
+                    )}
+                    <div className="flex items-center justify-between font-bold text-slate-900 dark:text-slate-100 border-t border-slate-200 dark:border-slate-800 pt-2 text-xs">
+                      <span>Costo Total Courier (A pagar a LAAR):</span>
+                      <strong className="font-mono text-slate-900 dark:text-slate-100 text-xs">${simResult.laarTotalCost.toFixed(2)}</strong>
+                    </div>
+                  </div>
+
+                  {/* Desglose Detallado Margen Ganancia Trajetix */}
+                  <div className="border-t border-slate-200 dark:border-slate-800 pt-3">
+                    <div className="flex items-center justify-between text-xs font-bold mb-2">
+                      <span className="text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5 text-xs">
+                        💰 Margen Ganancia Trajetix {simResult.isZeroMarginApplied ? "(Exento 0%)" : ""}:
+                      </span>
+                      <span className="text-emerald-600 dark:text-emerald-400 font-mono text-sm font-extrabold">+${simResult.trajetixProfitTotal.toFixed(2)}</span>
+                    </div>
+
+                    {!simResult.isZeroMarginApplied && (
+                      <div className="grid grid-cols-2 gap-2 text-xs bg-slate-50 dark:bg-slate-900/90 p-3 rounded-lg border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200">
+                        <div>
+                          <span className="text-slate-500 dark:text-slate-400 block text-[11px] mb-0.5">Margen Flete (+{config.rates.trajetixFreightMarginPercent}%):</span>
+                          <strong className="text-emerald-700 dark:text-emerald-300 font-mono text-xs font-bold">+${simResult.freightMargin.toFixed(2)}</strong>
+                        </div>
+                        <div>
+                          <span className="text-slate-500 dark:text-slate-400 block text-[11px] mb-0.5">Margen COD (+{config.rates.trajetixCodMarginPercent}%):</span>
+                          <strong className="text-emerald-700 dark:text-emerald-300 font-mono text-xs font-bold">+${simResult.codMargin.toFixed(2)}</strong>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Precio Final Cobrado al Cliente en "Nuevo Envío" */}
+                  <div className="flex items-center justify-between border-t-2 border-dashed border-slate-200 dark:border-slate-800 pt-3 mt-1">
+                    <div>
+                      <span className="text-xs font-bold text-slate-900 dark:text-white block">Precio Final al Cliente</span>
+                      <span className="text-[11px] text-slate-500 dark:text-slate-400 block">Mostrado en &quot;Nuevo Envío&quot;</span>
+                    </div>
+                    <span className="text-2xl font-black text-red-600 dark:text-red-500 font-mono">${simResult.finalPriceToClient.toFixed(2)}</span>
                   </div>
                 </div>
               </div>

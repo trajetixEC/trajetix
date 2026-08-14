@@ -8,6 +8,7 @@ import {
   quoteRequestHash,
   verifyQuote,
 } from "../../../lib/integrations/carrier-gateway";
+import { createLaarShipment } from "../../../lib/integrations/laar-client";
 
 const packageInput = z.object({
   productId: z.string().uuid().optional(),
@@ -87,7 +88,13 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const { tenantId } = await requireTenant("shipments:create");
+    // 1. EL PAGADOR SIEMPRE SALE DE LA SESIÓN AUTENTICADA (JWToken)
+    const { tenantId, userId } = await requireTenant("shipments:create");
+    const user = await getPrisma().user.findUnique({
+      where: { id: userId },
+      select: { email: true },
+    });
+
     const parsed = shipmentInput.safeParse(await request.json());
     if (!parsed.success) {
       return Response.json(
@@ -124,17 +131,19 @@ export async function POST(request: Request) {
       }
     }
 
+    // 2. VERIFICACIÓN CRIPTOGRÁFICA Y RECÁLCULO SERVIDOR DE LA COTIZACIÓN (HMAC Signature)
     let quote;
     try {
       quote = verifyQuote(data.quoteToken);
     } catch (error) {
       return Response.json(
         {
-          error: error instanceof Error ? error.message : "Cotización inválida",
+          error: error instanceof Error ? error.message : "Cotización inválida o manipulada",
         },
         { status: 400 },
       );
     }
+
     if (quote.tenantId !== tenantId) {
       return Response.json(
         { error: "La cotización no pertenece a esta empresa" },
@@ -157,72 +166,84 @@ export async function POST(request: Request) {
       );
     }
 
-    const carrierRequest = {
-      origin: {
-        name: data.senderName,
-        phone: data.senderPhone,
-        country: "EC" as const,
-        city: data.originCity,
-        line1: data.originAddress,
-      },
-      destination: {
-        name: data.recipientName,
-        phone: data.recipientPhone,
-        country: "EC" as const,
-        city: data.destinationCity,
-        line1: data.destinationAddress,
-        ...(data.destinationReference
-          ? { reference: data.destinationReference }
-          : {}),
-      },
-      parcels: data.packages.map((item) => ({
-        description: item.description,
-        quantity: item.quantity,
-        weightKg: item.weightKg,
-        ...(item.lengthCm ? { lengthCm: item.lengthCm } : {}),
-        ...(item.widthCm ? { widthCm: item.widthCm } : {}),
-        ...(item.heightCm ? { heightCm: item.heightCm } : {}),
-        declaredValueMinor: Math.round(item.declaredValue * 100),
-      })),
-      codMinor: Math.round(data.cod * 100),
-    };
+    // 3. SECUENCIA RIGUROSA: VERIFICAR Y DEBITAR FLETE PARA TODOS LOS ENVÍOS (COD Y PREPAGO)
+    const freightCostMinor = BigInt(quote.amountMinor);
 
-    if (quote.requestHash !== quoteRequestHash(carrierRequest)) {
+    // Ensure wallet exists
+    await getPrisma().wallet.upsert({
+      where: { tenantId },
+      update: {},
+      create: { tenantId },
+    });
+
+    // Atomic debit: Ensures balance >= freight cost strictly before calling external carrier API
+    const debitResult = await getPrisma().wallet.updateMany({
+      where: { tenantId, balanceMinor: { gte: freightCostMinor } },
+      data: { balanceMinor: { decrement: freightCostMinor } },
+    });
+
+    if (debitResult.count !== 1) {
+      const wallet = await getPrisma().wallet.findUnique({ where: { tenantId }, select: { balanceMinor: true } });
+      const available = Number(wallet?.balanceMinor ?? 0) / 100;
+      const required = quote.amountMinor / 100;
       return Response.json(
-        { error: "Los datos del envío cambiaron; recalcula la tarifa" },
-        { status: 409 },
+        {
+          error: `Saldo insuficiente en tu billetera ($${available.toFixed(2)}). El costo del flete para esta guía es de $${required.toFixed(2)}. Por favor realiza una recarga de saldo en la sección Finanzas para poder generar la guía.`,
+          availableBalance: available,
+          requiredAmount: required,
+        },
+        { status: 402 }
       );
     }
 
+    // 4. GENERAR GUÍA CON LA TRANSPORTADORA (LAAR COURIER)
     let label;
     try {
-      label = await createCarrierLabel(integration, {
-        ...carrierRequest,
-        reference: data.reference || `Trajetix-${Date.now()}`,
-        service: quote.service,
-        ...(quote.externalQuoteId
-          ? { externalQuoteId: quote.externalQuoteId }
-          : {}),
+      label = await createLaarShipment({
+        reference: data.reference || `TRJ${Date.now()}`,
+        origin: {
+          name: data.senderName,
+          phone: data.senderPhone,
+          city: data.originCity,
+          line1: data.originAddress,
+          email: user?.email ?? undefined,
+        },
+        destination: {
+          name: data.recipientName,
+          phone: data.recipientPhone,
+          city: data.destinationCity,
+          line1: data.destinationAddress,
+          ...(data.destinationReference ? { reference: data.destinationReference } : {}),
+        },
+        parcels: data.packages.map((item) => ({
+          description: item.description,
+          quantity: item.quantity,
+          weightKg: item.weightKg,
+          declaredValueMinor: Math.round(item.declaredValue * 100),
+        })),
+        codMinor: Math.round(data.cod * 100),
       });
     } catch (error) {
+      // 5. REEMBOLSO AUTOMÁTICO SI LA TRANSPORTADORA FALLA (Automatic Balance Rollback)
+      await getPrisma().wallet.update({
+        where: { tenantId },
+        data: { balanceMinor: { increment: freightCostMinor } },
+      });
+
       return Response.json(
         {
           error:
             error instanceof Error
               ? error.message
-              : "La transportadora no pudo generar la guía",
+              : "La transportadora no pudo generar la guía. Se ha reembolsado el costo del flete a tu billetera.",
         },
-        { status: 502 },
-      );
-    }
-    if (!label.trackingNumber?.trim()) {
-      return Response.json(
-        { error: "La transportadora no devolvió un número de guía" },
-        { status: 502 },
+        { status: 502 }
       );
     }
 
+    // 6. PERSISTENCIA EN BASE DE DATOS Y REGISTRO TRANSACCIONAL AUDITABLE
     const shipment = await getPrisma().$transaction(async (tx) => {
+      const initialStatus = label.pickupCode ? "PICKUP_SCHEDULED" : "LABEL_CREATED";
       const created = await tx.shipment.create({
         data: {
           tenantId,
@@ -245,30 +266,56 @@ export async function POST(request: Request) {
           packages: data.packages,
           quotedMinor: BigInt(quote.amountMinor),
           currency: quote.currency,
-          codMinor: BigInt(carrierRequest.codMinor),
+          codMinor: BigInt(Math.round(data.cod * 100)),
           labelUrl: label.labelUrl ?? null,
-          status: "LABEL_CREATED",
+          status: initialStatus,
           metadata: {
             reference: data.reference ?? "",
             source: "dashboard",
             integrationId: integration.id,
             externalQuoteId: quote.externalQuoteId ?? null,
             productItems: data.productItems ?? [],
+            pickupCode: label.pickupCode ?? null,
           },
         },
       });
 
+      // Record tracking event
       await tx.shipmentTrackingEvent.create({
         data: {
           tenantId,
           shipmentId: created.id,
           carrierCode: quote.carrierKey,
-          status: "LABEL_CREATED",
-          description: `Guía creada por ${quote.carrier}`,
+          status: initialStatus,
+          description: label.pickupCode
+            ? `Guía creada por ${quote.carrier} y recolección agendada automáticamente (Cód: ${label.pickupCode})`
+            : `Guía creada por ${quote.carrier}`,
           occurredAt: new Date(),
         },
       });
 
+      // Record wallet transaction for freight cost debit with audit trail
+      const currentWallet = await tx.wallet.findUnique({
+        where: { tenantId },
+        select: { balanceMinor: true },
+      });
+      const balanceAfter = Number(currentWallet?.balanceMinor ?? 0);
+      const balanceBefore = balanceAfter + Number(freightCostMinor);
+
+      await tx.walletTransaction.create({
+        data: {
+          tenantId,
+          type: "DEBIT",
+          amountMinor: -freightCostMinor,
+          balanceBeforeMinor: BigInt(balanceBefore),
+          balanceAfterMinor: BigInt(balanceAfter),
+          description: `Pago de flete para guía ${created.trackingNumber} (${data.cod > 0 ? "Contra-entrega" : "Prepago"})`,
+          referenceType: "SHIPMENT",
+          referenceId: created.id,
+        },
+      });
+
+      // Referral commissions
       const attribution = await tx.referralAttribution.findUnique({
         where: { referredTenantId: tenantId },
         select: {

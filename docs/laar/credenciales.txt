@@ -1,11 +1,41 @@
-postman request POST 'https://api.laarcourier.com:9747/api/Login/authenticate' \
+# ==============================================================================
+# CREDANCIALES OFICIALES - INTEGRACIÓN LAAR COURIER (2026)
+# ==============================================================================
 
-  --header 'Content-Type: application/json' \
+## 🟢 1. AMBIENTE DE PRODUCCIÓN (REAL / OPERATIVO)
+- **URL Base API**: https://api.laarcourier.com:9747
+- **Usuario**: `plaza.toala.api`
+- **Contraseña**: `O4CO)nFX`
+- **RUC Empresa**: `1316668522001`
+- **Código Usuario**: `15441`
+- **Código Sucursal**: `171135`
+- **Uso**: Creación de guías operativas reales, impresión de etiquetas PDF oficiales, tracking y recaudo dinero COD.
 
-  --body '{
+---
 
-  "username": "prueba.plaza.api",
+## 🟡 2. AMBIENTE DE PRUEBAS (SANDBOX / DESARROLLO)
+- **URL Base API**: https://api.laarcourier.com:9747
+- **Usuario**: `prueba.plaza.api`
+- **Contraseña**: `zhV-AL!]`
+- **RUC Empresa**: `1791705726001`
+- **Código Usuario**: `15354`
+- **Código Sucursal**: `82301`
+- **Uso**: Pruebas de integración inicial y pruebas unitarias de software.
 
-  "password": "zhV-AL!]"
+---
 
-}'
+## 🔌 3. ENDPOINTS PRINCIPALES DE LAAR COURIER (2026)
+1. **Autenticación (JWT Token)**:
+   POST `https://api.laarcourier.com:9747/api/Login/authenticate`
+
+2. **Creación de Guías Contado (Prepago)**:
+   POST `https://api.laarcourier.com:9747/api/Guias/v1/guias/contado?isRetorno=false`
+
+3. **Creación de Guías COD (Recaudo Contra Entrega)**:
+   POST `https://api.laarcourier.com:9747/api/Guias/v1/guias/destinatario?isRetorno=false`
+
+4. **Descarga de PDF Oficial de Etiqueta Térmica**:
+   GET `https://api.laarcourier.com:9747/api/Pdfs/v3/etiqueta/descargar?guia={NO_GUIA}`
+
+5. **Tracking / Consulta de Estado**:
+   GET `https://api.laarcourier.com:9746/guias/v4/{NO_GUIA}`

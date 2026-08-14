@@ -1,0 +1,772 @@
+Contenido
+................................
+................................
+................................
+...............
+................................
+................................
+................................
+................................
+................................
+...............................
+................................
+................................
+................................
+...
+................................
+................................
+................................
+..
+................................
+................................
+....................
+................................
+................................
+................................
+...........
+................................
+................................
+........................
+................................
+................................
+................................
+.......
+................................
+................................
+.............................
+................................
+................................
+...............................
+................................
+................................
+.
+2026
+DOCUMENTACI
+Ó
+N API
+{
+"username"
+:
+"
+sistemas.apitest.uio
+"
+,
+"password"
+:
+"
+XXXXXXXXXK
+"
+}
+Una vez concluidas las pruebas correspondientes, por favor solicite las credenciales para
+Producción a través de su ejecutivo comercial.
+{
+"username"
+:
+"sistemas.apitest.uio"
+,
+"password"
+:
+"
+XXXXXXXXXK"
+}
+{
+"token"
+:
+4
+"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1bmlxdWVfbmFtZSI6IjY2Iiwicm9sZSI6IjEiLCJhY3R
+vcnQiOiI0Nzk3MyIsIm5hbWVVc3VhcmlvIjoic2lzdGVtYXMudWlvIiwiaWRVc3VhcmlvIjoiNjYiLCJpZF
+NFwaXdlYi5sYWFyY291cmllci5jb206MzIxMCJ9.14SGgbOlDl0m81sIM6uQCNlYYpEgxU15A8ehjM
+TDzbw"
+,
+"nombre"
+:
+"
+sistemas.apitest.uio
+"
+,
+"ruc"
+:
+"1791705726001"
+,
+"codigoUsuario"
+:
+xxxx
+,
+"codigoSucursal"
+:
+xxxx
+}
+{
+"message": "Usuario o contrasenia inconrrectos!!!"
+}
+{
+"Error": "Unauthorized",
+"Message": "Token required to access this
+resource, incorrect or expired.",
+"StatusCode": 401,
+"Timestamp": "2025
+-
+10
+-
+21T10:38:58.1308238
+-
+05:00"
+}
+[
+{
+"codigo": 20100101901,
+"nombre": "AMBATO",
+"trayecto": "TP",
+"provincia": "TUNGURAHUA",
+"codigoProvincia": "201001019",
+"codigor": 16
+},
+{
+"codigo": 20100101902,
+"nombre": "BAÑOS DE AGUA SANTA",
+"trayecto": "TE",
+"provincia": "TUNGURAHUA",
+"codigoProvincia": "201001019",
+"codigor": 16
+},
+{
+"codigo": 201001001001,
+"nombre": "QUITO",
+"trayecto": "TP",
+"provincia": "PICHINCHA",
+"codigoProvincia": "201001001",
+"codigor": 1
+}
+]
+Error: response status is 400
+{
+"Error": "Unauthorized",
+"
+Message": "Token required to access this resource, incorrect or expired.",
+"StatusCode": 401,
+"Timestamp": "2025
+-
+10
+-
+17T13:17:30.352931
+-
+05:00"
+}
+[
+{
+"p07Id": 201202002001002,
+"p19Nombre": "DOCUMENTO"
+},
+{
+"p07Id": 201202002002013,
+"p19Nombre": "CARGA"
+},
+{
+"p07Id": 201202002004001,
+"p19Nombre": "VALIJA"
+}
+]
+Error: response status is 400
+{
+"Error": "Unauthorized",
+"Message": "Token required to access this resource,
+incorrect or expired.",
+"StatusCode": 401,
+"Timestamp": "2025
+-
+10
+-
+17T13:17:30.352931
+-
+05:00"
+}
+origen
+identificacionO
+ciudadO
+nombreO
+direccion
+referencia
+numeroCasa
+postal
+telefono
+celular
+destino
+identificacionD
+ciudadD
+nombreD
+direccion
+referencia
+numeroCasa
+postal
+telefono
+celular
+categoria
+latitud
+longitud
+numeroGuia
+tipoServicio
+noPiezas
+peso
+valorDeclarado
+contiene
+tamanio
+cod
+costoflete
+costoproducto
+tipocobro
+comentario
+fechaPedido
+retorno
+tipoServicio
+noPiezas
+peso
+contiene
+comentario
+tamanio
+extras
+campo1
+campo2
+campo3
+retiroOficina
+isRetiro
+idOficina
+isRetiro
+=true\
+{
+"origen": {
+"identificacionO": "1001995123",
+"ciudadO": "201001001001",
+"nombreO": "JUAN PEREZ",
+"direccion
+": "Av. 12 de octubre 1135 e Ignacio de Veintimilla. Frente a la parada de las
+Universidades",
+"referencia": "",
+"numeroCasa": "",
+"postal": "",
+"telefono": "062662017",
+"celular": "0995901335"
+},
+"destino": {
+"identificacionD": "17159
+XXXX
+3",
+"ciudadD": "20100101901",
+"nombreD": "JUAN PEREZ DESTINO",
+"direccion
+": "CIUDADELA UNCOVIA, AVENIDA CAMINO A PATAMARCA #297,
+TRANSVERSAL CALLE CUTUCHIL, MEDIA CUADRA LA COZANA DEL ZAM,AL FRENTE EL
+PAPI POLLO, CASA 2 PISOS, CERRAMIENTO DE PIEDRA,COLOR VERDE",
+"referencia": "Nos vemos en la puerta",
+"numeroCasa": "N24
+-
+789",
+"postal": "",
+"telefono": "0995901335",
+"celular": "0995901335",
+"categoria": "B",
+"latitud": "
+-
+2.868243753741845",
+"longitud": "
+-
+78.98354722249057"
+},
+"numeroGuia": "TESTNEWAPI01",
+"tipoServicio": "201202002002013",
+"noPiezas": 2,
+"peso": 2.55,
+"valorDeclarado": 25.25,
+"contiene": "ROPA DE BEBE",
+"tamanio": "MEDIANO",
+"cod": true,
+"costoflete": 0,
+"costoproducto": 0,
+"tipocobro": 0,
+"comentario": "Por favor escribir por WhatsApp o llamar para coordinar",
+"fechaPedido": "",
+"retorno": {
+"tipoServicio": "",
+"noPiezas": 0,
+"peso": 0,
+"contiene": "",
+"comentario": "",
+"tamanio": ""
+},
+"extras": {
+"campo1": "",
+"campo2": "",
+"campo3": ""
+}
+}
+{
+"guia": "SISLCTESTNEWAPI01",
+"url
+":
+"https://api.laarcourier.com:9747/api/Pdfs/v3/etiqueta/descargar?guia=SISLCTESTNEWAPI01",
+"zpl": null
+}
+{
+"message": "Número de Guía ya existe... :\("
+}
+{
+"message"
+:
+"Ingrese Codigo
+de Ciudad de Destino. :\("
+}
+{
+"message"
+:
+"Ingrese una cantidad de piezas \(>=1\
+:\("
+}
+{
+"message"
+:
+"Ingrese un peso \(>=0.01\
+:\("
+}
+{
+"message"
+:
+"Ingrese una número de celular. :\("
+}
+{
+"message"
+:
+"Ingrese un Nombre de Destinatario. :\("
+}
+{
+"message"
+:
+"Ingrese una Dirección. :\("
+}
+{
+"message"
+:
+"El campo \(costoproducto
+\ es obligatorio, debe tener formato numérico válido y ser
+mayor a cero para una guía COD"
+}
+{
+"Error": "Unauthorized",
+"Message": "Token required to access this resource, incorrect or expired.",
+"
+StatusCode": 401,
+"Timestamp": "2025
+-
+10
+-
+17T13:17:30.352931
+-
+05:00"
+}
+No aplica, recibe el parámetro guía por URL
+{
+"Error": "Unauthorized",
+"Message": "Token required to access this resource,
+incorrect or expired.",
+"StatusCode": 401,
+"Timestamp": "2025
+-
+10
+-
+21T10:38:58.1308238
+-
+05:00"
+}
+destino
+identificacionD
+ciudadD
+nombreD
+direccion
+referencia
+numeroCasa
+postal
+telefono
+celular
+categoria
+latitud
+longitud
+numeroGuia
+tipoServicio
+noPiezas
+peso
+valorDeclarado
+contiene
+tamanio
+cod
+costoflete
+costoproducto
+tipocobro
+comentario
+fechaPedido
+{
+"destino": {
+"identificacionD": "0910429943",
+"ciudadD": "201001001001",
+"nombreD": "Maria Teresa Amador",
+"direccion": "P
+í
+o Jaramillo Alvarado Pradera 1 manzana A1 villa 5 junto al asadero",
+"referencia": "Estacion del metro la Y",
+"numeroCasa": "",
+"postal": "170403",
+"telefono": "981879747",
+"celular": "981879747",
+"correo": "",
+"categoria": "B",
+"latitud": "",
+"longitud": ""
+},
+"numeroGuia": "TESTNEWAPIDES01",
+"tipoServicio": "201202002002013",
+"noPiezas": 2,
+"peso": 1.08,
+"valorDeclarado": 0,
+"contiene": "pendientes 7487358635 collar 8293369553 anillo 3815415848",
+"tamanio": "",
+"cod": false,
+"costoflete": 0,
+"costoproducto": 15.55,
+"tipocobro": 0,
+"comentario": "Por favor escribir por WhatsApp o llamar para coordinar",
+"agendar": false,
+"fechaPedido": ""
+}
+{
+"message": "Número de Guía ya existe... :\("
+}
+{
+"message"
+:
+"Ingrese Codigo
+de Ciudad de Destino. :\("
+}
+{
+"message"
+:
+"Ingrese una cantidad de piezas \(>=1\
+:\("
+}
+{
+"message"
+:
+"Ingrese un peso \(>=0.01\
+:\("
+}
+{
+"message"
+:
+"Ingrese una número de celular. :\("
+}
+{
+"message"
+:
+"Ingrese un Nombre de Destinatario. :\("
+}
+{
+"message"
+:
+"Ingrese una Dirección. :\("
+}
+{
+"Error": "Unauthorized",
+"Message": "Token required to access this resource, incorrect or expired.",
+"StatusCode": 401,
+"Timestamp
+": "2025
+-
+10
+-
+17T13:17:30.352931
+-
+05:00"
+}
+No aplica recibe el parámetro número de guía por URL
+{
+"message
+": "La guía no le pertenece"
+}
+{
+"message"
+:
+"La guía ya esta anulada "
+}
+{
+"message"
+:
+"La guía tiene movilización"
+}
+{
+"Error": "Unauthorized",
+"Message": "Token required to access this
+resource, incorrect or expired.",
+"StatusCode": 401,
+"Timestamp": "2025
+-
+10
+-
+17T13:17:30.352931
+-
+05:00"
+}
+No aplica recibe el parámetro
+fecha
+por URL
+formato \(yyyy
+-
+MM
+-
+dd\
+Content
+-
+Length: 43369
+Content
+-
+Type: application/pdf
+Date: Wed, 07 Jan 2026 04:58:04 GMT
+Server: Kestrel
+Content
+-
+Disposition: attachment;
+filename=Manifiestor_Recoleccion_2025
+-
+12
+-
+26_2358.pdf;
+filename*=UTF
+-
+8''Manifiestor_Recoleccion_2025
+-
+12
+-
+26_2358.pdf
+Fecha Invalida. :\(
+{
+"Error": "Unauthorized",
+"Message": "Token required to access this resource, incorrect or expired.",
+"StatusCode": 401,
+"Timestamp": "2025
+-
+10
+-
+17T13:17:30.352931
+-
+05:00"
+}
+No aplica recibe el parámetro número de guía por
+URL
+Guía no existe en LCE / o no tiene movilización... :\(
+{
+"Error": "Unauthorized",
+"Message": "Token required to access this resource, incorrect or expired.",
+"StatusCode": 401,
+"Timestamp
+": "2025
+-
+10
+-
+17T13:17:30.352931
+-
+05:00"
+}
+SISLCTEMUAPI08
+No aplica recibe el par
+á
+metro n
+ú
+mero de gu
+í
+a por URL
+Download file
+content
+-
+disposition: attachment; filename=SISLCTEMUAPI08.zip; filename*=UTF
+-
+8''SISLCTEMUAPI08.zip
+content
+-
+length: 22
+content
+-
+type: application/zip
+date: Wed,22 Oct 2025 21:35:54 GMT
+request
+-
+context: appId=cid
+-
+v1:a97396e8
+-
+0a51
+-
+46ee
+-
+9ddf
+-
+4bbf814824f1
+server: Microsoft
+-
+IIS/10.0
+x
+-
+powered
+-
+by: ASP.NET
+{
+"message": "
+There are no images for the guide: SISLCTEMUAPI08
+"
+}
+{
+"Error": "Unauthorized",
+"Message
+": "Token required to access this resource, incorrect or expired.",
+"StatusCode": 401,
+"Timestamp": "2025
+-
+10
+-
+17T13:17:30.352931
+-
+05:00"
+}
+{
+"guia
+": "SISLCTESTNEWAPI01",
+"destino": {
+"ciudad": 20100101901,
+"nombre": "JUAN PEREZ DESTINO",
+"cedula": "",
+"callePrincipal": "Eloy Alfaro y 09 de octubre Diagonal al caf
+é
+del tren
+-
+",
+"numeracion": "Oe7
+-
+35",
+"calleSecundaria": "Huachi",
+"referencia": "Atras de la Iglesia el Dinvo Ni
+ñ
+o",
+"telefono": "939425150",
+"celular": "939425150",
+"observacion": "Prueba",
+"correo": ""
+},
+"autorizado": {
+"isDevolucion": false,
+"nombre": "Carlos Alvear",
+"observacion": "Prueba"
+}
+}
+{
+"codigo": 1,
+"titulo": "Actualizar",
+"mensaje": "Estimado Cliente, se actualizarán los datos de la guía.",
+"tipo": "warning",
+"op": 1
+}
+{
+"message": "El estado actual \("ENTREGADO"\ de la guía SISLCTESTNEWAPI01
+no es valido
+para una DEVOLUCION
+}
+{
+"message": "
+Esta gu
+í
+a no tiene una novedad de Actualizaci
+ó
+n:
+SISLCTESTNEWAPI01"
+}
+{
+"message": "
+El campo 'Nombre' es obligatorio, no puede estar vac
+í
+o y no puede contener la
+palabra 'string'.
+"
+}
+{
+"message": "
+El campo '
+callePrincipal' es obligatorio, no puede estar vac
+í
+o y no puede contener
+la palabra 'string'.
+"
+}
+{
+"message": "
+El campo 'calleSecundaria' es obligatorio, no puede estar vac
+í
+o y no puede
+contener la palabra 'string'.
+"
+}
+{
+"message": "
+El campo 'referencia' es obligatorio, no puede estar vac
+í
+o y no puede contener la
+palabra 'string'.
+"
+}
+{
+"message": "
+El campo 'celular' es obligatorio, no puede estar vac
+í
+o y no puede contener la
+palabra 'string'.
+"
+}
+{
+"message": "
+El campo 'numeracion' es obligatorio, no puede estar vac
+í
+o y no puede contener la
+palabra 'string'.
+"
+}
+{
+"message": "
+Ya tiene una actualizacion la guia:
+SISLCTESTNEWAPI01"
+}
+{
+"message": "
+No se permite actualizar el nombre del destinatario.
+"
+}
+{
+"message": "
+Existe una devolucion creada para la guia:
+SISLCTESTNEWAPI01"
+}
+{
+"message": "
+No se permite el cambio de ciudad si desea movilizar debe
+generar
+una
+nueva
+gu
+í
+a.
+"
+}
+{
+"Error": "Unauthorized",
+"Message": "Token required to access this resource, incorrect or expired.",
+"
+StatusCode": 401,
+"Timestamp": "2025
+-
+10
+-
+17T13:17:30.352931
+-
+05:00"
+}

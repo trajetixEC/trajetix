@@ -169,25 +169,50 @@ export function calculateCarrierFreightRate(params: {
   config: CarrierConfig;
   originCity: string;
   destinationCity: string;
+  destinationZone?: ZoneKey;
   weightKg: number;
   codAmount: number;
   isZeroMarginUser?: boolean;
+  isDocument?: boolean;
 }) {
-  const { config, destinationCity, weightKg, codAmount, isZeroMarginUser = false } = params;
+  const { config, originCity, destinationCity, destinationZone, weightKg, codAmount, isZeroMarginUser = false, isDocument = false } = params;
 
-  // Search zone mapping
+  const cleanOrigin = (originCity || "").trim().toLowerCase();
+  const cleanDest = (destinationCity || "").trim().toLowerCase();
+
+  // Check if same city or metropolitan area (Local zone)
+  const isSameCity =
+    cleanOrigin.length > 0 &&
+    cleanDest.length > 0 &&
+    (cleanOrigin === cleanDest ||
+      cleanOrigin.includes(cleanDest) ||
+      cleanDest.includes(cleanOrigin));
+
   const destMapping = config.locationMappings.find(
     (m) =>
-      m.canonicalCity.toLowerCase() === destinationCity.toLowerCase() ||
-      destinationCity.toLowerCase().includes(m.canonicalCity.toLowerCase())
+      m.canonicalCity.toLowerCase() === cleanDest ||
+      cleanDest.includes(m.canonicalCity.toLowerCase())
   );
-  const zoneKey: ZoneKey = destMapping ? destMapping.zone : "principal";
+
+  let zoneKey: ZoneKey;
+  if (isSameCity) {
+    zoneKey = "local";
+  } else if (destinationZone) {
+    zoneKey = destinationZone;
+  } else if (destMapping && destMapping.zone !== "local") {
+    zoneKey = destMapping.zone;
+  } else {
+    // Interprovincial default between different cities is principal
+    zoneKey = "principal";
+  }
+
   const zoneConfig = config.rates.zones[zoneKey] || config.rates.zones.principal;
 
   // Base freight cost (LAAR cost)
+  const baseKg = isDocument ? 2 : zoneConfig.baseKg;
   let laarFreightCost = zoneConfig.baseCost;
-  if (weightKg > zoneConfig.baseKg) {
-    const extraKg = Math.ceil(weightKg - zoneConfig.baseKg);
+  if (weightKg > baseKg) {
+    const extraKg = Math.ceil(weightKg - baseKg);
     laarFreightCost += extraKg * zoneConfig.extraKgCost;
   }
 

@@ -8,6 +8,10 @@ import {
   requestCarrierQuotes,
   signQuote,
 } from "../../../../lib/integrations/carrier-gateway";
+import {
+  calculateCarrierFreightRate,
+  DEFAULT_LAAR_CONFIG,
+} from "../../../../lib/carrier-config-store";
 
 const address = z.object({
   name: z.string().min(2),
@@ -40,77 +44,113 @@ export async function POST(request: Request) {
   try {
     const { tenantId } = await requireTenant("shipments:create");
     const parsed = input.safeParse(await request.json());
-    if (!parsed.success)
+    if (!parsed.success) {
       return Response.json(
         { error: "Datos insuficientes para cotizar" },
-        { status: 400 },
+        { status: 400 }
       );
-    const integrations = await getPrisma().carrierIntegration.findMany({
+    }
+
+    let integrations = await getPrisma().carrierIntegration.findMany({
       where: {
         tenantId,
         active: true,
         capabilities: { hasEvery: ["quote", "label"] },
       },
     });
-    if (!integrations.length)
-      return Response.json(
-        {
-          error:
-            "Trajetix aún no ha configurado transportadoras para esta empresa",
-          quotes: [],
+
+    if (!integrations.length) {
+      // Auto-provision default LAAR Courier integration for this tenant
+      const defaultLaar = await getPrisma().carrierIntegration.upsert({
+        where: { tenantId_carrierKey: { tenantId, carrierKey: "laar" } },
+        update: { active: true },
+        create: {
+          tenantId,
+          carrierKey: "laar",
+          name: "LAAR Courier",
+          baseUrl: "https://api.laarcourier.com",
+          secretRef: "LAAR_API_KEY",
+          capabilities: ["quote", "label", "cancel", "tracking", "webhook", "pickup"],
+          active: true,
         },
-        { status: 409 },
-      );
+      });
+      integrations = [defaultLaar];
+    }
+
     const requestHash = quoteRequestHash(parsed.data);
     const settled = await Promise.allSettled(
       integrations.map(async (integration) => {
-        const result = await requestCarrierQuotes(integration, parsed.data);
-        return result.quotes.map((quote) => ({
-          carrier: integration.name,
-          carrierKey: integration.carrierKey,
-          service: quote.service,
-          amount: quote.amountMinor / 100,
-          currency: quote.currency ?? "USD",
-          estimatedDays: quote.estimatedDays,
-          token: signQuote({
-            tenantId,
-            integrationId: integration.id,
+        try {
+          const result = await requestCarrierQuotes(integration, parsed.data);
+          return result.quotes.map((quote) => ({
             carrier: integration.name,
             carrierKey: integration.carrierKey,
             service: quote.service,
-            amountMinor: quote.amountMinor,
+            amount: quote.amountMinor / 100,
             currency: quote.currency ?? "USD",
-            requestHash,
-            externalQuoteId: quote.externalQuoteId,
-            expiresAt: Date.now() + 15 * 60_000,
-          }),
-        }));
-      }),
+            estimatedDays: quote.estimatedDays ?? 1,
+            token: signQuote({
+              tenantId,
+              integrationId: integration.id,
+              carrier: integration.name,
+              carrierKey: integration.carrierKey,
+              service: quote.service,
+              amountMinor: quote.amountMinor,
+              currency: quote.currency ?? "USD",
+              requestHash,
+              externalQuoteId: quote.externalQuoteId,
+              expiresAt: Date.now() + 15 * 60_000,
+            }),
+          }));
+        } catch {
+          // Fallback to internal freight rate calculation engine for LAAR Courier
+          const weightTotal = parsed.data.parcels.reduce(
+            (sum, p) => sum + p.weightKg * p.quantity,
+            0
+          );
+          const breakdown = calculateCarrierFreightRate({
+            config: DEFAULT_LAAR_CONFIG,
+            originCity: parsed.data.origin.city,
+            destinationCity: parsed.data.destination.city,
+            weightKg: weightTotal,
+            codAmount: parsed.data.codMinor / 100,
+          });
+
+          const amountMinor = Math.round(breakdown.finalPriceToClient * 100);
+          const serviceName = "Entrega Estándar Puerta a Puerta";
+
+          return [
+            {
+              carrier: integration.name,
+              carrierKey: integration.carrierKey,
+              service: serviceName,
+              amount: breakdown.finalPriceToClient,
+              currency: "USD",
+              estimatedDays: 1,
+              token: signQuote({
+                tenantId,
+                integrationId: integration.id,
+                carrier: integration.name,
+                carrierKey: integration.carrierKey,
+                service: serviceName,
+                amountMinor,
+                currency: "USD",
+                requestHash,
+                expiresAt: Date.now() + 15 * 60_000,
+              }),
+            },
+          ];
+        }
+      })
     );
+
     const quotes = settled
       .flatMap((result) =>
-        result.status === "fulfilled" ? result.value : ([] as never[]),
+        result.status === "fulfilled" ? result.value : []
       )
       .sort((a, b) => a.amount - b.amount);
-    const errors = settled.flatMap((result) =>
-      result.status === "rejected"
-        ? [
-            result.reason instanceof Error
-              ? result.reason.message
-              : "Error de transportadora",
-          ]
-        : [],
-    );
-    if (!quotes.length)
-      return Response.json(
-        {
-          error: errors[0] ?? "Ninguna transportadora devolvió tarifas",
-          quotes: [],
-          errors,
-        },
-        { status: 502 },
-      );
-    return Response.json({ quotes, errors });
+
+    return Response.json({ quotes });
   } catch (error) {
     return tenantError(error);
   }

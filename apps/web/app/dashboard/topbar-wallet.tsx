@@ -24,7 +24,6 @@ export function TopbarWallet({ onOpen }: { onOpen: () => void }) {
   const containerRef = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async () => {
-    setLoading(true);
     try {
       const response = await fetch("/api/finance/overview");
       if (response.ok) setOverview((await response.json()) as WalletOverview);
@@ -35,6 +34,20 @@ export function TopbarWallet({ onOpen }: { onOpen: () => void }) {
 
   useEffect(() => {
     void load();
+
+    // Auto-refresh on custom event
+    const handleUpdate = () => void load();
+    window.addEventListener("wallet:updated", handleUpdate);
+
+    // Auto-refresh every 10 seconds
+    const interval = setInterval(() => {
+      void load();
+    }, 10000);
+
+    return () => {
+      window.removeEventListener("wallet:updated", handleUpdate);
+      clearInterval(interval);
+    };
   }, [load]);
 
   useEffect(() => {

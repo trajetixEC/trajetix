@@ -78,6 +78,13 @@ enum WithdrawalStatus {
   CANCELLED
 }
 
+enum RechargeStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
 enum OrderStatus {
   DRAFT
   PENDING
@@ -134,6 +141,7 @@ model Tenant {
   wallet                Wallet?
   bankAccounts          BankAccount[]
   withdrawals           Withdrawal[]
+  walletRecharges       WalletRecharge[]
   referralProfiles      ReferralProfile[]      @relation("ReferralProfileTenant")
   referredBy            ReferralAttribution?   @relation("ReferredTenant")
   referralEarnings      ReferralCommission[]   @relation("ReferralBeneficiary")
@@ -162,6 +170,8 @@ model User {
   passwordResets       PasswordResetToken[]
   invitationsSent      Invitation[]         @relation("InvitationSender")
   withdrawalsRequested Withdrawal[]
+  rechargesRequested   WalletRecharge[]     @relation("RechargeRequestedBy")
+  rechargesApproved    WalletRecharge[]     @relation("RechargeApprovedBy")
   referralProfiles     ReferralProfile[]
 }
 
@@ -289,7 +299,7 @@ model Warehouse {
   tenantId  String              @db.Uuid
   code      String              @db.VarChar(40)
   name      String              @db.VarChar(120)
-  timezone  String              @db.VarChar(60)
+  timezone  String?             @default("America/Guayaquil") @db.VarChar(60)
   address   Json
   active    Boolean             @default(true)
   createdAt DateTime            @default(now()) @db.Timestamptz(6)
@@ -401,15 +411,17 @@ model Wallet {
 }
 
 model WalletTransaction {
-  id            String                @id @default(uuid()) @db.Uuid
-  tenantId      String                @db.Uuid
-  type          WalletTransactionType
-  amountMinor   BigInt
-  description   String                @db.VarChar(250)
-  referenceType String?               @db.VarChar(50)
-  referenceId   String?               @db.VarChar(100)
-  createdAt     DateTime              @default(now()) @db.Timestamptz(6)
-  wallet        Wallet                @relation(fields: [tenantId], references: [tenantId], onDelete: Cascade)
+  id                 String                @id @default(uuid()) @db.Uuid
+  tenantId           String                @db.Uuid
+  type               WalletTransactionType
+  amountMinor        BigInt
+  balanceBeforeMinor BigInt                @default(0)
+  balanceAfterMinor  BigInt                @default(0)
+  description        String                @db.VarChar(250)
+  referenceType      String?               @db.VarChar(50)
+  referenceId        String?               @db.VarChar(100)
+  createdAt          DateTime              @default(now()) @db.Timestamptz(6)
+  wallet             Wallet                @relation(fields: [tenantId], references: [tenantId], onDelete: Cascade)
 
   @@index([tenantId, createdAt])
 }
@@ -492,6 +504,28 @@ model Withdrawal {
   tenant        Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   bankAccount   BankAccount      @relation(fields: [tenantId, bankAccountId], references: [tenantId, id], onDelete: Restrict)
   requestedBy   User             @relation(fields: [requestedById], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, status, createdAt])
+}
+
+model WalletRecharge {
+  id              String         @id @default(uuid()) @db.Uuid
+  tenantId        String         @db.Uuid
+  requestedById   String         @db.Uuid
+  amountMinor     BigInt
+  bankName        String         @db.VarChar(100)
+  referenceNumber String         @db.VarChar(100)
+  receiptUrl      String         @db.Text
+  status          RechargeStatus @default(PENDING)
+  note            String?        @db.VarChar(250)
+  approvedById    String?        @db.Uuid
+  approvedAt      DateTime?      @db.Timestamptz(6)
+  createdAt       DateTime       @default(now()) @db.Timestamptz(6)
+  updatedAt       DateTime       @updatedAt @db.Timestamptz(6)
+
+  tenant      Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  requestedBy User   @relation("RechargeRequestedBy", fields: [requestedById], references: [id], onDelete: Restrict)
+  approvedBy  User?  @relation("RechargeApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull)
 
   @@index([tenantId, status, createdAt])
 }
@@ -740,3 +774,41 @@ model OutboxEvent {
   @@index([publishedAt, occurredAt])
   @@index([tenantId, aggregateType, aggregateId])
 }
+
+model LaarLocation {
+  id              String             @id @default(uuid()) @db.Uuid
+  codigo          BigInt             @unique
+  nombre          String             @db.VarChar(160)
+  trayecto        String             @db.VarChar(10)
+  provincia       String             @db.VarChar(120)
+  codigoProvincia String             @db.VarChar(40)
+  codigor         Int?
+  frecuencia      String?            @db.VarChar(100)
+  jornada         String?            @db.VarChar(100)
+  createdAt       DateTime           @default(now()) @db.Timestamptz(6)
+  updatedAt       DateTime           @updatedAt @db.Timestamptz(6)
+  canonical       CanonicalLocation?
+
+  @@index([provincia, nombre])
+  @@index([trayecto])
+}
+
+model CanonicalLocation {
+  id             String        @id @default(uuid()) @db.Uuid
+  name           String        @db.VarChar(160)
+  province       String        @db.VarChar(120)
+  countryCode    String        @default("EC") @db.Char(2)
+  active         Boolean       @default(true)
+  laarLocationId String?       @unique @db.Uuid
+  laarCode       BigInt?
+  laarCityName   String?       @db.VarChar(160)
+  laarZone       String        @default("principal") @db.VarChar(30)
+  createdAt      DateTime      @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime      @updatedAt @db.Timestamptz(6)
+  laarLocation   LaarLocation? @relation(fields: [laarLocationId], references: [id], onDelete: SetNull)
+
+  @@index([name])
+  @@index([province])
+  @@index([laarZone])
+}
+

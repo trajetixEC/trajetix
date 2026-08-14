@@ -70,6 +70,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       const userId = user?.id ?? String(token.userId ?? token.sub ?? "");
       if (userId) {
         token.userId = userId;
+        const dbUser = await getPrisma().user.findUnique({
+          where: { id: userId },
+          select: { platformRole: true },
+        });
+        token.platformRole = dbUser?.platformRole;
+
         const membership = await getPrisma().membership.findFirst({
           where: { userId, status: "ACTIVE" },
           include: { tenant: true, roles: { include: { role: true } } },
@@ -106,6 +112,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     session({ session, token }: { session: any; token: any }) {
       if (session.user) {
         session.user.id = String(token.userId ?? token.sub);
+        session.user.platformRole = token.platformRole;
         if (token.tenantId) session.user.tenantId = String(token.tenantId);
         if (token.tenantName)
           session.user.tenantName = String(token.tenantName);
