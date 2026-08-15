@@ -123,6 +123,7 @@ type AdminBreakdown = {
   trajetixProfitTotal: number;
   finalPriceToClient: number;
   isZeroMarginApplied: boolean;
+  insuranceCost: number;
 };
 
 function money(amount: number) {
@@ -212,11 +213,11 @@ export function NewShipmentModule({
     labelUrl?: string | null;
   } | null>(null);
 
-  // Check if current user is admin / owner / superuser
+  // Check if current user is system superadmin / platform admin
   const isAdmin = useMemo(() => {
-    if (!user) return true; // Default to admin breakdown in dev
+    if (!user) return false;
     const r = (user.role || "").toLowerCase();
-    return r.includes("owner") || r.includes("admin") || r.includes("super") || r.includes("propietario");
+    return r.includes("superadmin") || r.includes("super");
   }, [user]);
 
   useEffect(() => {
@@ -1209,14 +1210,15 @@ export function NewShipmentModule({
                   Valor Recaudo a Cobrar al Cliente *
                 </label>
                 <div className="relative">
-                  <DollarSign className="w-4 h-4 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                  <DollarSign className="w-4 h-4 text-slate-400 dark:text-slate-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                   <input
                     type="number"
                     min="0.01"
                     step="0.01"
                     value={draft.cod}
                     onChange={(e) => update("cod", Number(e.target.value))}
-                    className="w-full pl-8 pr-3 py-2 text-sm bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg font-mono font-bold text-slate-900 dark:text-slate-100"
+                    style={{ paddingLeft: "2.5rem" }}
+                    className="w-full !pl-10 pr-3 py-2 text-sm bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg font-mono font-bold text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all"
                   />
                 </div>
               </div>
@@ -1268,37 +1270,81 @@ export function NewShipmentModule({
                 <div className="space-y-3">
                   {quotes.map((q) => {
                     const isSelected = selectedQuoteToken === q.token;
+                    const clientFreight = adminBreakdown
+                      ? adminBreakdown.laarFreightCost + adminBreakdown.freightMargin
+                      : q.amount;
+                    const clientCod = adminBreakdown
+                      ? adminBreakdown.laarCodCost + adminBreakdown.codMargin
+                      : 0;
+                    const insuranceCost = adminBreakdown?.insuranceCost ?? 0;
+
                     return (
                       <div
                         key={q.token}
                         onClick={() => setSelectedQuoteToken(q.token)}
-                        className={`p-4 rounded-xl border cursor-pointer transition-all flex items-center justify-between ${
+                        className={`p-4 rounded-xl border cursor-pointer transition-all space-y-3 ${
                           isSelected
                             ? "border-red-500 bg-red-50/40 dark:bg-red-950/20 shadow-md ring-2 ring-red-500/20"
-                            : "border-slate-200 dark:border-slate-800 hover:border-slate-300"
+                            : "border-slate-200 dark:border-slate-800 hover:border-slate-300 bg-white dark:bg-slate-900"
                         }`}
                       >
-                        <div className="flex items-center gap-3">
-                          <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-xs ${
-                            isSelected ? "bg-red-600 text-white" : "bg-slate-100 dark:bg-slate-800 text-slate-500"
-                          }`}>
-                            <Truck className="w-5 h-5" />
-                          </div>
-                          <div>
-                            <div className="font-bold text-sm text-slate-900 dark:text-white">{q.carrier}</div>
-                            <div className="text-xs text-slate-500 dark:text-slate-400">
-                              {q.service} {q.estimatedDays ? `· Entrega estimada: ${q.estimatedDays} día(s)` : ""}
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-xs ${
+                              isSelected ? "bg-red-600 text-white" : "bg-slate-100 dark:bg-slate-800 text-slate-500"
+                            }`}>
+                              <Truck className="w-5 h-5" />
                             </div>
+                            <div>
+                              <div className="font-bold text-sm text-slate-900 dark:text-white flex items-center gap-2">
+                                <span>{q.carrier}</span>
+                              </div>
+                              <div className="text-xs text-slate-500 dark:text-slate-400">
+                                {q.service} {q.estimatedDays ? `· Entrega estimada: ${q.estimatedDays} día(s)` : ""}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="text-right">
+                            <div className="text-lg font-bold font-mono text-slate-900 dark:text-white">
+                              {money(q.amount)}
+                            </div>
+                            <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold block">
+                              Precio Final Facturado
+                            </span>
                           </div>
                         </div>
 
-                        <div className="text-right">
-                          <div className="text-lg font-bold font-mono text-slate-900 dark:text-white">
+                        {/* Desglose de Flete, COD y Seguro (Minimalista) */}
+                        <div className="pt-2.5 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between gap-4 text-xs text-slate-500 dark:text-slate-400">
+                          <div className="flex items-center gap-4 flex-wrap">
+                            <div>
+                              <span>Flete: </span>
+                              <span className="font-mono font-medium text-slate-900 dark:text-slate-200">
+                                {money(clientFreight)}
+                              </span>
+                            </div>
+
+                            {draft.paymentMode === "COD" && clientCod > 0 && (
+                              <div>
+                                <span>Comisión COD: </span>
+                                <span className="font-mono font-medium text-slate-900 dark:text-slate-200">
+                                  {money(clientCod)}
+                                </span>
+                              </div>
+                            )}
+
+                            <div>
+                              <span>Seguro: </span>
+                              <span className="font-mono font-medium text-slate-900 dark:text-slate-200">
+                                {money(insuranceCost)}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="text-right font-mono font-bold text-slate-900 dark:text-white">
                             {money(q.amount)}
                           </div>
-                          <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">
-                            Precio Final Facturado
-                          </span>
                         </div>
                       </div>
                     );
@@ -1309,58 +1355,58 @@ export function NewShipmentModule({
 
             {/* ADMIN COST BREAKDOWN PANEL (VISTA ADMINISTRADOR) */}
             {isAdmin && adminBreakdown && (
-              <div className="bg-slate-900 text-white border border-slate-800 rounded-xl p-6 shadow-xl space-y-4">
-                <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white border border-slate-200 dark:border-slate-800 rounded-xl p-6 shadow-sm space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
                   <div className="flex items-center gap-2">
-                    <ShieldCheck className="w-5 h-5 text-emerald-400" />
-                    <h3 className="text-sm font-bold text-white uppercase tracking-wider">
+                    <ShieldCheck className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                    <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider">
                       Desglose de Costos & Márgenes (Vista Administrador)
                     </h3>
                   </div>
-                  <span className="px-2.5 py-1 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded-md text-[10px] font-mono font-bold uppercase">
+                  <span className="px-2.5 py-1 bg-emerald-50 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-500/30 rounded-md text-[10px] font-mono font-bold uppercase">
                     Zona LAAR: {adminBreakdown.zoneName}
                   </span>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   {/* Cost paid to LAAR */}
-                  <div className="bg-slate-950/80 p-3.5 rounded-xl border border-slate-800">
-                    <div className="text-[11px] font-bold text-slate-400 uppercase mb-2 flex items-center gap-1.5">
-                      <Truck className="w-3.5 h-3.5 text-blue-400" />
+                  <div className="bg-slate-50/80 dark:bg-slate-950/80 p-3.5 rounded-xl border border-slate-200 dark:border-slate-800">
+                    <div className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase mb-2 flex items-center gap-1.5">
+                      <Truck className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
                       <span>Pago a LAAR Courier</span>
                     </div>
                     <div className="space-y-1 text-xs">
-                      <div className="flex justify-between text-slate-300">
+                      <div className="flex justify-between text-slate-600 dark:text-slate-300">
                         <span>Flete Base LAAR:</span>
                         <span className="font-mono">{money(adminBreakdown.laarFreightCost)}</span>
                       </div>
-                      <div className="flex justify-between text-slate-300">
+                      <div className="flex justify-between text-slate-600 dark:text-slate-300">
                         <span>Comisión COD LAAR:</span>
                         <span className="font-mono">{money(adminBreakdown.laarCodCost)}</span>
                       </div>
-                      <div className="pt-1.5 border-t border-slate-800 flex justify-between font-bold text-white">
+                      <div className="pt-1.5 border-t border-slate-200 dark:border-slate-800 flex justify-between font-bold text-slate-900 dark:text-white">
                         <span>Costo Directo LAAR:</span>
-                        <span className="font-mono text-blue-400">{money(adminBreakdown.laarTotalCost)}</span>
+                        <span className="font-mono text-blue-600 dark:text-blue-400">{money(adminBreakdown.laarTotalCost)}</span>
                       </div>
                     </div>
                   </div>
 
                   {/* Profit earned by Trajetix */}
-                  <div className="bg-slate-950/80 p-3.5 rounded-xl border border-slate-800">
-                    <div className="text-[11px] font-bold text-slate-400 uppercase mb-2 flex items-center gap-1.5">
-                      <TrendingUp className="w-3.5 h-3.5 text-emerald-400" />
+                  <div className="bg-slate-50/80 dark:bg-slate-950/80 p-3.5 rounded-xl border border-slate-200 dark:border-slate-800">
+                    <div className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase mb-2 flex items-center gap-1.5">
+                      <TrendingUp className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
                       <span>Ganancia Trajetix</span>
                     </div>
                     <div className="space-y-1 text-xs">
-                      <div className="flex justify-between text-slate-300">
+                      <div className="flex justify-between text-slate-600 dark:text-slate-300">
                         <span>Margen Flete:</span>
                         <span className="font-mono">+{money(adminBreakdown.freightMargin)}</span>
                       </div>
-                      <div className="flex justify-between text-slate-300">
+                      <div className="flex justify-between text-slate-600 dark:text-slate-300">
                         <span>Margen COD:</span>
                         <span className="font-mono">+{money(adminBreakdown.codMargin)}</span>
                       </div>
-                      <div className="pt-1.5 border-t border-slate-800 flex justify-between font-bold text-emerald-400">
+                      <div className="pt-1.5 border-t border-slate-200 dark:border-slate-800 flex justify-between font-bold text-emerald-600 dark:text-emerald-400">
                         <span>Ganancia Neta ERP:</span>
                         <span className="font-mono">+{money(adminBreakdown.trajetixProfitTotal)}</span>
                       </div>
@@ -1368,23 +1414,23 @@ export function NewShipmentModule({
                   </div>
 
                   {/* Final Price charged to merchant */}
-                  <div className="bg-slate-950/80 p-3.5 rounded-xl border border-slate-800">
-                    <div className="text-[11px] font-bold text-slate-400 uppercase mb-2 flex items-center gap-1.5">
-                      <Receipt className="w-3.5 h-3.5 text-red-400" />
+                  <div className="bg-slate-50/80 dark:bg-slate-950/80 p-3.5 rounded-xl border border-slate-200 dark:border-slate-800">
+                    <div className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase mb-2 flex items-center gap-1.5">
+                      <Receipt className="w-3.5 h-3.5 text-red-600 dark:text-red-400" />
                       <span>Cobro Final Cliente</span>
                     </div>
                     <div className="space-y-1 text-xs">
-                      <div className="flex justify-between text-slate-400">
+                      <div className="flex justify-between text-slate-500 dark:text-slate-400">
                         <span>Costo LAAR:</span>
                         <span className="font-mono">{money(adminBreakdown.laarTotalCost)}</span>
                       </div>
-                      <div className="flex justify-between text-slate-400">
+                      <div className="flex justify-between text-slate-500 dark:text-slate-400">
                         <span>+ Margen Trajetix:</span>
                         <span className="font-mono">+{money(adminBreakdown.trajetixProfitTotal)}</span>
                       </div>
-                      <div className="pt-1.5 border-t border-slate-800 flex justify-between font-bold text-white text-sm">
+                      <div className="pt-1.5 border-t border-slate-200 dark:border-slate-800 flex justify-between font-bold text-slate-900 dark:text-white text-sm">
                         <span>Cobro Total:</span>
-                        <span className="font-mono text-red-400">{money(adminBreakdown.finalPriceToClient)}</span>
+                        <span className="font-mono text-red-600 dark:text-red-400">{money(adminBreakdown.finalPriceToClient)}</span>
                       </div>
                     </div>
                   </div>

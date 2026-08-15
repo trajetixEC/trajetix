@@ -665,7 +665,7 @@ export function DashboardApp({
             />
           )}
           {section === "Usuarios de tienda" && <StoreUsersModule />}
-          {section === "Transportadoras" && (
+          {section === "Transportadoras" && superAdmin ? (
             <div>
               <div className="page-header">
                 <div>
@@ -731,7 +731,14 @@ export function DashboardApp({
                 onClose={() => setIsCarriersModalOpen(false)}
               />
             </div>
-          )}
+          ) : section === "Transportadoras" ? (
+            <div className="panel" style={{ padding: "3rem", textAlign: "center" }}>
+              <h2 style={{ color: "#dc2626", margin: "0 0 0.5rem 0" }}>🔒 Acceso Denegado</h2>
+              <p style={{ color: "var(--text-muted)", fontSize: "0.9rem" }}>
+                Solo los administradores de la plataforma (SuperAdmin) tienen acceso a la configuración de transportadoras.
+              </p>
+            </div>
+          ) : null}
           {section === "Integraciones" && <IntegrationsModule />}
           {section === "Mi perfil" && (
             <ProfileModule

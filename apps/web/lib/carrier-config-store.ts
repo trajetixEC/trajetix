@@ -259,5 +259,6 @@ export function calculateCarrierFreightRate(params: {
     trajetixProfitTotal,
     finalPriceToClient,
     isZeroMarginApplied: isZeroMarginUser,
+    insuranceCost: config.rates.fixedSurcharge || 0,
   };
 }
