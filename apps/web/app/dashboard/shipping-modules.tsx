@@ -103,6 +103,8 @@ type Draft = {
 
   paymentMode: "COD" | "NO_COD";
   cod: number;
+  insuranceEnabled: boolean;
+  insuredValue: number;
   reference: string;
 };
 
@@ -124,6 +126,7 @@ type AdminBreakdown = {
   finalPriceToClient: number;
   isZeroMarginApplied: boolean;
   insuranceCost: number;
+  insuredValue: number;
 };
 
 function money(amount: number) {
@@ -158,6 +161,8 @@ function newDraft(): Draft {
 
     paymentMode: "COD",
     cod: 0,
+    insuranceEnabled: false,
+    insuredValue: 0,
     reference: "",
   };
 }
@@ -261,9 +266,13 @@ export function NewShipmentModule({
         (sum, p) => sum + (p.weightKg && p.weightKg > 0 ? p.weightKg : 1) * p.quantity,
         0
       );
-      const maxL = Math.max(15, ...productLines.map((p) => (p.lengthCm && p.lengthCm > 0 ? p.lengthCm : 15)));
-      const maxW = Math.max(15, ...productLines.map((p) => (p.widthCm && p.widthCm > 0 ? p.widthCm : 15)));
-      const maxH = Math.max(15, ...productLines.map((p) => (p.heightCm && p.heightCm > 0 ? p.heightCm : 15)));
+      const validL = productLines.map((p) => p.lengthCm).filter((v): v is number => typeof v === "number" && v > 0);
+      const validW = productLines.map((p) => p.widthCm).filter((v): v is number => typeof v === "number" && v > 0);
+      const validH = productLines.map((p) => p.heightCm).filter((v): v is number => typeof v === "number" && v > 0);
+
+      const maxL = validL.length > 0 ? Math.max(...validL) : 15;
+      const maxW = validW.length > 0 ? Math.max(...validW) : 15;
+      const maxH = validH.length > 0 ? Math.max(...validH) : 15;
 
       setDraft((current) => ({
         ...current,
@@ -467,6 +476,7 @@ export function NewShipmentModule({
         destinationCity: draft.destinationCity,
         weightKg: draft.weightKg,
         codAmount: draft.paymentMode === "COD" ? draft.cod : 0,
+        insuredValue: draft.insuranceEnabled ? draft.insuredValue : 0,
         isZeroMarginUser: isZeroMargin,
       });
 
@@ -577,6 +587,7 @@ export function NewShipmentModule({
           })),
           reference: draft.reference,
           cod: draft.paymentMode === "COD" ? draft.cod : 0,
+          insuredValue: draft.insuranceEnabled ? draft.insuredValue : 0,
           quoteToken: selectedQuote.token,
         }),
       });
@@ -981,11 +992,20 @@ export function NewShipmentModule({
                           )}
                         </div>
                         <div className="min-w-0">
-                          <div className="font-bold text-sm text-slate-900 dark:text-slate-100 truncate">{p.name}</div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <div className="font-bold text-sm text-slate-900 dark:text-slate-100 truncate">{p.name}</div>
+                            {p.stock <= 0 && (
+                              <span className="px-2 py-0.5 text-[10px] font-semibold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 rounded-md flex-shrink-0">
+                                Stock 0
+                              </span>
+                            )}
+                          </div>
                           <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1 flex-wrap mt-0.5">
                             <span>SKU: {p.sku}</span>
                             <span>·</span>
-                            <span>Stock: {p.stock} un.</span>
+                            <span className={p.stock <= 0 ? "text-amber-600 dark:text-amber-400 font-medium" : ""}>
+                              Stock: {p.stock} un.
+                            </span>
                             <span>·</span>
                             <span className="font-medium text-slate-700 dark:text-slate-300">{money(p.price)}</span>
                             <span>·</span>
@@ -1198,7 +1218,10 @@ export function NewShipmentModule({
                     ? "border-red-500 bg-red-50/50 dark:bg-red-950/30 text-red-600 dark:text-red-400"
                     : "border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 text-slate-600"
                 }`}
-                onClick={() => update("paymentMode", "NO_COD")}
+                onClick={() => {
+                  update("paymentMode", "NO_COD");
+                  update("cod", 0);
+                }}
               >
                 Sin Recaudo
               </button>
@@ -1223,6 +1246,53 @@ export function NewShipmentModule({
                 </div>
               </div>
             )}
+
+            {/* SEGURO DE ENVÍO */}
+            <div className="mb-4 pt-3 border-t border-slate-200 dark:border-slate-800">
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={draft.insuranceEnabled}
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      update("insuranceEnabled", checked);
+                      if (checked && (!draft.insuredValue || draft.insuredValue === 0)) {
+                        update("insuredValue", saleTotal > 0 ? saleTotal : 50);
+                      }
+                    }}
+                    className="w-4 h-4 rounded border-slate-300 dark:border-slate-700 text-red-600 focus:ring-red-500 cursor-pointer"
+                  />
+                  <span>Asegurar Envío (1.5%)</span>
+                </label>
+                <span className="text-[11px] font-mono font-bold text-slate-600 dark:text-slate-400">
+                  {draft.insuranceEnabled ? money((draft.insuredValue || 0) * 0.015) : "$0.00"}
+                </span>
+              </div>
+
+              {draft.insuranceEnabled && (
+                <div className="mt-2 space-y-1">
+                  <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-400 block">
+                    Monto a Asegurar (Valor Declarado) *
+                  </label>
+                  <div className="relative">
+                    <DollarSign className="w-4 h-4 text-slate-400 dark:text-slate-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <input
+                      type="number"
+                      min="0.01"
+                      step="0.01"
+                      value={draft.insuredValue}
+                      onChange={(e) => update("insuredValue", Number(e.target.value))}
+                      style={{ paddingLeft: "2.5rem" }}
+                      className="w-full !pl-10 pr-3 py-2 text-sm bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg font-mono font-bold text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all"
+                    />
+                  </div>
+                  <p className="text-[10px] text-slate-400 dark:text-slate-500">
+                    Costo del seguro: 1.5% del valor declarado (${((draft.insuredValue || 0) * 0.015).toFixed(2)}).
+                  </p>
+                </div>
+              )}
+            </div>
 
             <button
               type="button"
@@ -1406,6 +1476,12 @@ export function NewShipmentModule({
                         <span>Margen COD:</span>
                         <span className="font-mono">+{money(adminBreakdown.codMargin)}</span>
                       </div>
+                      {adminBreakdown.insuranceCost > 0 && (
+                        <div className="flex justify-between text-slate-600 dark:text-slate-300">
+                          <span>Seguro (1.5%):</span>
+                          <span className="font-mono">+{money(adminBreakdown.insuranceCost)}</span>
+                        </div>
+                      )}
                       <div className="pt-1.5 border-t border-slate-200 dark:border-slate-800 flex justify-between font-bold text-emerald-600 dark:text-emerald-400">
                         <span>Ganancia Neta ERP:</span>
                         <span className="font-mono">+{money(adminBreakdown.trajetixProfitTotal)}</span>
@@ -1487,18 +1563,42 @@ export function NewShipmentModule({
             </div>
 
             {/* Carrier Summary */}
-            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 shadow-sm space-y-2">
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 shadow-sm space-y-3">
               <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
                 4. Transportadora Seleccionada
               </h3>
               <div className="font-bold text-sm text-slate-900 dark:text-white">
                 {selectedQuote?.carrier} — {selectedQuote?.service}
               </div>
-              <div className="flex justify-between items-center text-xs pt-2 border-t border-slate-200 dark:border-slate-800">
-                <span>Modalidad: {draft.paymentMode === "COD" ? `Recaudo (${money(draft.cod)})` : "Sin Recaudo"}</span>
-                <span className="font-mono font-bold text-base text-red-600 dark:text-red-400">
-                  {money(selectedQuote?.amount ?? 0)}
-                </span>
+              <div className="space-y-1.5 text-xs pt-2 border-t border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400">
+                <div className="flex justify-between">
+                  <span>Flete Base:</span>
+                  <span className="font-mono font-medium text-slate-900 dark:text-slate-200">
+                    {money(adminBreakdown ? adminBreakdown.laarFreightCost + adminBreakdown.freightMargin : (selectedQuote?.amount ?? 0))}
+                  </span>
+                </div>
+                {draft.paymentMode === "COD" && (
+                  <div className="flex justify-between">
+                    <span>Comisión COD (Recaudo {money(draft.cod)}):</span>
+                    <span className="font-mono font-medium text-slate-900 dark:text-slate-200">
+                      {money(adminBreakdown ? adminBreakdown.laarCodCost + adminBreakdown.codMargin : 0)}
+                    </span>
+                  </div>
+                )}
+                {draft.insuranceEnabled && (
+                  <div className="flex justify-between">
+                    <span>Seguro (1.5% de {money(draft.insuredValue)}):</span>
+                    <span className="font-mono font-medium text-slate-900 dark:text-slate-200">
+                      {money(adminBreakdown ? adminBreakdown.insuranceCost : draft.insuredValue * 0.015)}
+                    </span>
+                  </div>
+                )}
+                <div className="flex justify-between items-center pt-2 text-xs font-bold border-t border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white">
+                  <span>Total Flete a Debitar:</span>
+                  <span className="font-mono text-base text-red-600 dark:text-red-400">
+                    {money(selectedQuote?.amount ?? 0)}
+                  </span>
+                </div>
               </div>
             </div>
           </div>

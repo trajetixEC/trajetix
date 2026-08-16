@@ -8,6 +8,11 @@ import {
 } from "../../../lib/integrations/carrier-gateway";
 import { createLaarShipment } from "../../../lib/integrations/laar-client";
 
+import {
+  calculateCarrierFreightRate,
+  DEFAULT_LAAR_CONFIG,
+} from "../../../lib/carrier-config-store";
+
 const packageInput = z.object({
   productId: z.string().uuid().optional(),
   description: z.string().trim().min(2).max(500),
@@ -45,6 +50,7 @@ const shipmentInput = z.object({
     .optional(),
   reference: z.string().trim().max(100).optional(),
   cod: z.number().min(0).max(1000000).default(0),
+  insuredValue: z.number().min(0).max(1000000).optional().default(0),
   quoteToken: z.string().min(20),
 });
 
@@ -242,6 +248,19 @@ export async function POST(request: Request) {
     // 6. PERSISTENCIA EN BASE DE DATOS Y REGISTRO TRANSACCIONAL AUDITABLE
     const shipment = await getPrisma().$transaction(async (tx) => {
       const initialStatus = label.pickupCode ? "PICKUP_SCHEDULED" : "LABEL_CREATED";
+      const weightTotal = data.packages.reduce(
+        (sum, p) => sum + p.weightKg * p.quantity,
+        0
+      );
+      const breakdown = calculateCarrierFreightRate({
+        config: DEFAULT_LAAR_CONFIG,
+        originCity: data.originCity,
+        destinationCity: data.destinationCity,
+        weightKg: weightTotal,
+        codAmount: data.cod,
+        insuredValue: data.insuredValue,
+      });
+
       const created = await tx.shipment.create({
         data: {
           tenantId,
@@ -274,6 +293,20 @@ export async function POST(request: Request) {
             externalQuoteId: quote.externalQuoteId ?? null,
             productItems: data.productItems ?? [],
             pickupCode: label.pickupCode ?? null,
+            insuredValue: data.insuredValue ?? 0,
+            costBreakdown: {
+              laarFreightCost: breakdown.laarFreightCost,
+              laarCodCost: breakdown.laarCodCost,
+              laarTotalCost: breakdown.laarTotalCost,
+              freightMargin: breakdown.freightMargin,
+              codMargin: breakdown.codMargin,
+              insuranceCost: breakdown.insuranceCost,
+              trajetixProfitTotal: breakdown.trajetixProfitTotal,
+              clientFreightCost: breakdown.laarFreightCost + breakdown.freightMargin,
+              clientCodCost: breakdown.laarCodCost + breakdown.codMargin,
+              clientInsuranceCost: breakdown.insuranceCost,
+              finalPriceToClient: breakdown.finalPriceToClient,
+            },
           },
         },
       });

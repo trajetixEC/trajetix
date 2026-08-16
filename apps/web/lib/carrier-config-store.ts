@@ -172,10 +172,21 @@ export function calculateCarrierFreightRate(params: {
   destinationZone?: ZoneKey;
   weightKg: number;
   codAmount: number;
+  insuredValue?: number;
   isZeroMarginUser?: boolean;
   isDocument?: boolean;
 }) {
-  const { config, originCity, destinationCity, destinationZone, weightKg, codAmount, isZeroMarginUser = false, isDocument = false } = params;
+  const {
+    config,
+    originCity,
+    destinationCity,
+    destinationZone,
+    weightKg,
+    codAmount,
+    insuredValue = 0,
+    isZeroMarginUser = false,
+    isDocument = false,
+  } = params;
 
   const cleanOrigin = (originCity || "").trim().toLowerCase();
   const cleanDest = (destinationCity || "").trim().toLowerCase();
@@ -244,7 +255,10 @@ export function calculateCarrierFreightRate(params: {
     }
   }
 
-  const trajetixProfitTotal = freightMargin + codMargin;
+  // Insurance cost charged to client: 1.5% of insured value
+  const insuranceCost = insuredValue > 0 ? Math.round(insuredValue * 0.015 * 100) / 100 : 0;
+
+  const trajetixProfitTotal = freightMargin + codMargin + insuranceCost;
   const finalPriceToClient = laarTotalCost + trajetixProfitTotal;
 
   return {
@@ -256,9 +270,10 @@ export function calculateCarrierFreightRate(params: {
     laarTotalCost,
     freightMargin,
     codMargin,
+    insuranceCost,
+    insuredValue,
     trajetixProfitTotal,
     finalPriceToClient,
     isZeroMarginApplied: isZeroMarginUser,
-    insuranceCost: config.rates.fixedSurcharge || 0,
   };
 }

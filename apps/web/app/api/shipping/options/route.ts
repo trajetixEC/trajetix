@@ -110,6 +110,10 @@ export async function GET() {
             total + Number(balance.onHand) - Number(balance.reserved),
           0,
         ),
+        weightKg: product.weightKg === null ? null : Number(product.weightKg),
+        lengthCm: product.lengthCm === null ? null : Number(product.lengthCm),
+        widthCm: product.widthCm === null ? null : Number(product.widthCm),
+        heightCm: product.heightCm === null ? null : Number(product.heightCm),
       })),
     });
   } catch (error) {
