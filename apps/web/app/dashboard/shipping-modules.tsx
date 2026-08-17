@@ -546,6 +546,7 @@ export function NewShipmentModule({
           },
           parcels: parcels(),
           codMinor: draft.paymentMode === "COD" ? Math.round(draft.cod * 100) : 0,
+          insuredValue: draft.insuredValue || 0,
         }),
       });
 
@@ -1395,6 +1396,7 @@ export function NewShipmentModule({
                     const insuranceCost = adminBreakdown?.clientInsuranceCost ?? 0;
                     const subtotalClient = adminBreakdown?.subtotalClient ?? (clientFreight + clientCod + insuranceCost);
                     const ivaCost = adminBreakdown?.ivaCost ?? (subtotalClient * 0.15);
+                    const displayAmount = adminBreakdown ? adminBreakdown.finalPriceToClient : q.amount;
 
                     return (
                       <div
@@ -1425,7 +1427,7 @@ export function NewShipmentModule({
 
                           <div className="text-right">
                             <div className="text-lg font-bold font-mono text-slate-900 dark:text-white">
-                              {money(q.amount)}
+                              {money(displayAmount)}
                             </div>
                             <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold block">
                               Precio Final Facturado (con IVA)
@@ -1470,7 +1472,7 @@ export function NewShipmentModule({
                           </div>
 
                           <div className="text-right font-mono font-bold text-slate-900 dark:text-white">
-                            {money(q.amount)}
+                            {money(displayAmount)}
                           </div>
                         </div>
                       </div>

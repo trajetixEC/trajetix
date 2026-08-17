@@ -38,6 +38,8 @@ const input = z.object({
   destination: address,
   parcels: z.array(parcel).min(1).max(100),
   codMinor: z.number().int().min(0),
+  insuredValue: z.number().min(0).optional().default(0),
+  insuredValueMinor: z.number().int().min(0).optional().default(0),
 });
 
 export async function POST(request: Request) {
@@ -114,6 +116,7 @@ export async function POST(request: Request) {
             destinationCity: parsed.data.destination.city,
             weightKg: weightTotal,
             codAmount: parsed.data.codMinor / 100,
+            insuredValue: parsed.data.insuredValue || (parsed.data.insuredValueMinor ? parsed.data.insuredValueMinor / 100 : 0),
           });
 
           const amountMinor = Math.round(breakdown.finalPriceToClient * 100);
