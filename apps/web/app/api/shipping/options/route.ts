@@ -93,13 +93,22 @@ export async function GET() {
     return Response.json({
       recipients: [...recipientMap.values()],
       carriers,
-      warehouses: warehouses.map((warehouse) => ({
-        id: warehouse.id,
-        code: warehouse.code,
-        name: warehouse.name,
-        city: (warehouse.address as { city?: string }).city ?? "",
-        address: (warehouse.address as { line1?: string }).line1 ?? "",
-      })),
+      warehouses: warehouses.map((warehouse) => {
+        const addr = (warehouse.address as { city?: string; line1?: string; latitude?: number; longitude?: number; lat?: number; lng?: number }) || {};
+        const rawLat = addr.latitude ?? addr.lat;
+        const rawLng = addr.longitude ?? addr.lng;
+        const lat = typeof rawLat === "number" && !isNaN(rawLat) && rawLat !== 0 ? rawLat : null;
+        const lng = typeof rawLng === "number" && !isNaN(rawLng) && rawLng !== 0 ? rawLng : null;
+        return {
+          id: warehouse.id,
+          code: warehouse.code,
+          name: warehouse.name,
+          city: addr.city ?? "",
+          address: addr.line1 ?? "",
+          latitude: lat,
+          longitude: lng,
+        };
+      }),
       products: products.map((product) => ({
         id: product.id,
         sku: product.sku,

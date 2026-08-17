@@ -37,12 +37,14 @@ export async function PUT(
     }
 
     const currentAddress = (existing.address as Record<string, unknown>) || {};
+    const hasValidLat = typeof parsed.data.latitude === "number" && !isNaN(parsed.data.latitude) && parsed.data.latitude !== 0;
+    const hasValidLng = typeof parsed.data.longitude === "number" && !isNaN(parsed.data.longitude) && parsed.data.longitude !== 0;
     const updatedAddress = {
       ...currentAddress,
       ...(parsed.data.city ? { city: parsed.data.city } : {}),
       ...(parsed.data.address ? { line1: parsed.data.address } : {}),
-      ...(parsed.data.latitude !== undefined ? { lat: parsed.data.latitude } : {}),
-      ...(parsed.data.longitude !== undefined ? { lng: parsed.data.longitude } : {}),
+      ...(hasValidLat ? { latitude: parsed.data.latitude, lat: parsed.data.latitude } : {}),
+      ...(hasValidLng ? { longitude: parsed.data.longitude, lng: parsed.data.longitude } : {}),
     };
 
     const warehouse = await getPrisma().warehouse.update({

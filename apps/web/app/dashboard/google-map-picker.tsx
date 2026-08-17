@@ -8,8 +8,8 @@ import { MapPin } from "lucide-react";
 type LocationPickerProps = {
   city?: string;
   address?: string;
-  initialLat?: number;
-  initialLng?: number;
+  initialLat?: number | null | undefined;
+  initialLng?: number | null | undefined;
 };
 
 const CITY_COORDINATES: Record<string, [number, number]> = {
@@ -37,27 +37,67 @@ export function GoogleMapPicker({
   initialLng = -78.4678,
 }: LocationPickerProps) {
   const mapRef = useRef<HTMLDivElement>(null);
-  const [lat, setLat] = useState<number>(initialLat);
-  const [lng, setLng] = useState<number>(initialLng);
-  const [center, setCenter] = useState<[number, number]>([initialLat, initialLng]);
+  const validLat = typeof initialLat === "number" && !isNaN(initialLat) && initialLat !== 0 ? initialLat : -0.1807;
+  const validLng = typeof initialLng === "number" && !isNaN(initialLng) && initialLng !== 0 ? initialLng : -78.4678;
+  const [lat, setLat] = useState<number>(validLat);
+  const [lng, setLng] = useState<number>(validLng);
+  const [center, setCenter] = useState<[number, number]>([validLat, validLng]);
   const [zoom, setZoom] = useState<number>(14);
   const [googleLoaded, setGoogleLoaded] = useState(false);
 
+  const mapInstanceRef = useRef<google.maps.Map | null>(null);
+  const markerInstanceRef = useRef<google.maps.Marker | null>(null);
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "";
 
-  // Auto-center map when user selects or types a city
+  // Sync state if initialLat or initialLng change (e.g. editing different warehouse)
+  useEffect(() => {
+    if (typeof initialLat === "number" && typeof initialLng === "number" && !isNaN(initialLat) && !isNaN(initialLng) && initialLat !== 0 && initialLng !== 0) {
+      setLat(initialLat);
+      setLng(initialLng);
+      setCenter([initialLat, initialLng]);
+      if (markerInstanceRef.current) {
+        markerInstanceRef.current.setPosition({ lat: initialLat, lng: initialLng });
+      }
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.setCenter({ lat: initialLat, lng: initialLng });
+      }
+    }
+  }, [initialLat, initialLng]);
+
+  // Auto-center map ONLY when user interactively changes city
+  const prevCityRef = useRef(city);
   useEffect(() => {
     if (!city) return;
-    const cleanCity = city.trim().toLowerCase();
-    for (const [cityName, coords] of Object.entries(CITY_COORDINATES)) {
-      if (cleanCity.includes(cityName)) {
-        setCenter(coords);
-        setLat(coords[0]);
-        setLng(coords[1]);
-        break;
+    if (prevCityRef.current !== city) {
+      prevCityRef.current = city;
+      const cleanCity = city.trim().toLowerCase();
+      for (const [cityName, coords] of Object.entries(CITY_COORDINATES)) {
+        if (cleanCity.includes(cityName)) {
+          setCenter(coords);
+          setLat(coords[0]);
+          setLng(coords[1]);
+          if (markerInstanceRef.current) {
+            markerInstanceRef.current.setPosition({ lat: coords[0], lng: coords[1] });
+          }
+          if (mapInstanceRef.current) {
+            mapInstanceRef.current.setCenter({ lat: coords[0], lng: coords[1] });
+          }
+          break;
+        }
       }
     }
   }, [city]);
+
+  // Sync marker and map center when lat/lng state changes
+  useEffect(() => {
+    if (markerInstanceRef.current && typeof lat === "number" && typeof lng === "number" && !isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0) {
+      const pos = { lat, lng };
+      markerInstanceRef.current.setPosition(pos);
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.setCenter(pos);
+      }
+    }
+  }, [lat, lng]);
 
   // Load Official Google Maps JS SDK when API key is provided
   useEffect(() => {
@@ -81,6 +121,7 @@ export function GoogleMapPicker({
             mapTypeControl: false,
             streetViewControl: false,
           });
+          mapInstanceRef.current = map;
 
           const marker = new google.maps.Marker({
             position: defaultCenter,
@@ -88,6 +129,7 @@ export function GoogleMapPicker({
             draggable: true,
             title: "Ubicación de la Bodega",
           });
+          markerInstanceRef.current = marker;
 
           marker.addListener("dragend", () => {
             const pos = marker.getPosition();

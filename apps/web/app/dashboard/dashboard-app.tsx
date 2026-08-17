@@ -25,6 +25,7 @@ type Product = {
   id: string;
   sku: string;
   name: string;
+  brand?: string | null;
   description?: string;
   imageUrl?: string | null;
   stock: number;
@@ -78,6 +79,8 @@ type Warehouse = {
   name: string;
   city: string;
   address: string;
+  latitude?: number | null | undefined;
+  longitude?: number | null | undefined;
   timezone: string;
   products: number;
   stock: number;
@@ -246,9 +249,28 @@ export function DashboardApp({
     "product" | "customer" | "shipment" | "warehouse" | null
   >(null);
   const [adjustProduct, setAdjustProduct] = useState<Product | null>(null);
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [editingWarehouse, setEditingWarehouse] = useState<Warehouse | null>(null);
   const [deletingWarehouse, setDeletingWarehouse] = useState<Warehouse | null>(null);
   const [isCarriersModalOpen, setIsCarriersModalOpen] = useState(false);
+
+  const editProduct = async (id: string, payload: Record<string, unknown>) => {
+    const response = await fetch(`/api/products/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!response.ok) {
+      const body = (await response.json().catch(() => ({}))) as {
+        error?: string;
+      };
+      setNotice(body.error ?? "No se pudo actualizar el producto");
+      return false;
+    }
+    await loadOperationalData();
+    setNotice("Producto actualizado exitosamente");
+    return true;
+  };
 
   const editWarehouse = async (id: string, payload: Record<string, unknown>) => {
     const response = await fetch(`/api/warehouses/${id}`, {
@@ -262,6 +284,28 @@ export function DashboardApp({
       };
       setNotice(body.error ?? "No se pudo actualizar la bodega");
       return false;
+    }
+    const updatedWarehouseData = await response.json().catch(() => null);
+    if (updatedWarehouseData) {
+      const addr = (updatedWarehouseData.address as { city?: string; line1?: string; latitude?: number; longitude?: number; lat?: number; lng?: number }) || {};
+      const lat = typeof addr.latitude === "number" && !isNaN(addr.latitude) && addr.latitude !== 0 ? addr.latitude : (typeof addr.lat === "number" && !isNaN(addr.lat) && addr.lat !== 0 ? addr.lat : (typeof payload.latitude === "number" && !isNaN(payload.latitude) && payload.latitude !== 0 ? payload.latitude : null));
+      const lng = typeof addr.longitude === "number" && !isNaN(addr.longitude) && addr.longitude !== 0 ? addr.longitude : (typeof addr.lng === "number" && !isNaN(addr.lng) && addr.lng !== 0 ? addr.lng : (typeof payload.longitude === "number" && !isNaN(payload.longitude) && payload.longitude !== 0 ? payload.longitude : null));
+
+      setStore((current) => ({
+        ...current,
+        warehouses: current.warehouses.map((w) =>
+          w.id === id
+            ? {
+                ...w,
+                name: String(payload.name || w.name),
+                city: addr.city || String(payload.city || w.city),
+                address: addr.line1 || String(payload.address || w.address),
+                latitude: lat ?? w.latitude,
+                longitude: lng ?? w.longitude,
+              }
+            : w,
+        ),
+      }));
     }
     await loadOperationalData();
     setNotice("Bodega actualizada exitosamente");
@@ -287,8 +331,9 @@ export function DashboardApp({
   const loadOperationalData = useCallback(async () => {
     const tasks: Promise<void>[] = [];
     const load = <K extends keyof Store>(key: K, url: string) => {
+      const cacheBusterUrl = `${url}${url.includes("?") ? "&" : "?"}_t=${Date.now()}`;
       tasks.push(
-        fetch(url).then(async (response) => {
+        fetch(cacheBusterUrl, { cache: "no-store", headers: { "Cache-Control": "no-cache" } }).then(async (response) => {
           if (!response.ok) return;
           const value = (await response.json()) as Store[K];
           setStore((current) => ({ ...current, [key]: value }));
@@ -620,6 +665,7 @@ export function DashboardApp({
               query={query}
               onAdjust={setAdjustProduct}
               onCreate={() => setCreateEntity("product")}
+              onEdit={setEditingProduct}
             />
           )}
           {section === "Nuevo envío" && (
@@ -760,6 +806,13 @@ export function DashboardApp({
           warehouses={store.warehouses}
           onClose={() => setAdjustProduct(null)}
           onSubmit={adjustStock}
+        />
+      )}
+      {editingProduct && (
+        <EditProductModal
+          product={editingProduct}
+          onClose={() => setEditingProduct(null)}
+          onSave={editProduct}
         />
       )}
       {editingWarehouse && (
@@ -1291,11 +1344,13 @@ function Products({
   query,
   onAdjust,
   onCreate,
+  onEdit,
 }: {
   products: Product[];
   query: string;
   onAdjust: (product: Product) => void;
   onCreate: () => void;
+  onEdit: (product: Product) => void;
 }) {
   const filtered = products.filter((product) =>
     `${product.name} ${product.sku} ${product.category}`
@@ -1385,12 +1440,23 @@ function Products({
                     </div>
                   </td>
                   <td>
-                    <button
-                      className="secondary-button compact-button"
-                      onClick={() => onAdjust(product)}
-                    >
-                      Ajustar stock
-                    </button>
+                    <div className="flex items-center justify-end gap-2">
+                      <button
+                        type="button"
+                        className="secondary-button compact-button flex items-center gap-1.5"
+                        onClick={() => onEdit(product)}
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                        <span>Editar</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="secondary-button compact-button"
+                        onClick={() => onAdjust(product)}
+                      >
+                        Ajustar stock
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -1524,8 +1590,12 @@ function EditWarehouseModal({
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     const payload: Record<string, unknown> = Object.fromEntries(form.entries());
-    payload.latitude = Number(payload.latitude || 0);
-    payload.longitude = Number(payload.longitude || 0);
+    const latVal = Number(payload.latitude);
+    const lngVal = Number(payload.longitude);
+    if (!isNaN(latVal) && latVal !== 0) payload.latitude = latVal;
+    else delete payload.latitude;
+    if (!isNaN(lngVal) && lngVal !== 0) payload.longitude = lngVal;
+    else delete payload.longitude;
     setSaving(true);
     try {
       const ok = await onSave(warehouse.id, payload);
@@ -1590,7 +1660,12 @@ function EditWarehouseModal({
             />
           </label>
 
-          <GoogleMapPicker address={address} city={city} />
+          <GoogleMapPicker
+            address={address}
+            city={city}
+            initialLat={warehouse.latitude}
+            initialLng={warehouse.longitude}
+          />
 
           <div className="modal-actions mt-4 flex items-center justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
             <button
@@ -1879,8 +1954,12 @@ function EntityModal({
     }
     if (kind === "shipment") payload.cod = Number(payload.cod || 0);
     if (kind === "warehouse") {
-      payload.latitude = Number(payload.latitude || 0);
-      payload.longitude = Number(payload.longitude || 0);
+      const latVal = Number(payload.latitude);
+      const lngVal = Number(payload.longitude);
+      if (!isNaN(latVal) && latVal !== 0) payload.latitude = latVal;
+      else delete payload.latitude;
+      if (!isNaN(lngVal) && lngVal !== 0) payload.longitude = lngVal;
+      else delete payload.longitude;
       if (!payload.timezone) payload.timezone = "America/Guayaquil";
       if (!payload.code || !String(payload.code).trim()) {
         const cityPrefix = String(payload.city || "BOD")
@@ -2261,6 +2340,311 @@ function EntityModal({
           </div>
         </form>
       </section>
+    </div>
+  );
+}
+
+function EditProductModal({
+  product,
+  onClose,
+  onSave,
+}: {
+  product: Product;
+  onClose: () => void;
+  onSave: (id: string, payload: Record<string, unknown>) => Promise<boolean>;
+}) {
+  const [saving, setSaving] = useState(false);
+  const [productImage, setProductImage] = useState<string | undefined>(
+    product.imageUrl ?? undefined,
+  );
+  const [imageError, setImageError] = useState("");
+  const [costVal, setCostVal] = useState(String(product.cost ?? 0));
+  const [priceVal, setPriceVal] = useState(String(product.price ?? 0));
+  const [dropshippingPrice, setDropshippingPrice] = useState(
+    product.dropshippingPrice != null ? String(product.dropshippingPrice) : "",
+  );
+  const [suggestedDropshippingPrice, setSuggestedDropshippingPrice] = useState(
+    product.suggestedDropshippingPrice != null
+      ? String(product.suggestedDropshippingPrice)
+      : "",
+  );
+  const [suggestedPriceEdited, setSuggestedPriceEdited] = useState(false);
+  const [productFormError, setProductFormError] = useState("");
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setProductFormError("");
+    const form = new FormData(event.currentTarget);
+    const payload: Record<string, unknown> = Object.fromEntries(form.entries());
+
+    const sku = String(payload.sku || "").trim();
+    const name = String(payload.name || "").trim();
+    const costNum = Number(payload.cost || 0);
+    const priceNum = Number(payload.price || 0);
+    const dropPriceVal = String(payload.dropshippingPrice ?? "").trim();
+    const sugDropPriceVal = String(payload.suggestedDropshippingPrice ?? "").trim();
+    const dropPriceNum = dropPriceVal !== "" ? Number(dropPriceVal) : null;
+    const sugDropPriceNum = sugDropPriceVal !== "" ? Number(sugDropPriceVal) : null;
+
+    const weightNum = Number(payload.weightKg || 0);
+    const lengthNum = Number(payload.lengthCm || 0);
+    const widthNum = Number(payload.widthCm || 0);
+    const heightNum = Number(payload.heightCm || 0);
+
+    if (!sku) {
+      setProductFormError("Ingresa un código SKU para identificar el producto.");
+      return;
+    }
+    if (!name) {
+      setProductFormError("Ingresa el nombre completo del producto.");
+      return;
+    }
+    if (weightNum <= 0) {
+      setProductFormError("El peso del paquete debe ser mayor a 0 kg.");
+      return;
+    }
+    if (lengthNum <= 0 || widthNum <= 0 || heightNum <= 0) {
+      setProductFormError("Las dimensiones del paquete (largo, ancho y alto) deben ser mayores a 0 cm.");
+      return;
+    }
+    if (priceNum < costNum) {
+      setProductFormError(`El precio de venta al público PVP ($${priceNum.toFixed(2)}) no puede ser menor al costo de adquisición ($${costNum.toFixed(2)}).`);
+      return;
+    }
+    if (dropPriceNum !== null && dropPriceNum < costNum) {
+      setProductFormError(`El precio para dropshipping ($${dropPriceNum.toFixed(2)}) no puede ser menor al costo de adquisición ($${costNum.toFixed(2)}).`);
+      return;
+    }
+    if (dropPriceNum !== null && sugDropPriceNum !== null && dropPriceNum > sugDropPriceNum) {
+      setProductFormError(`El precio para dropshipping ($${dropPriceNum.toFixed(2)}) no puede ser mayor al precio sugerido dropshipping ($${sugDropPriceNum.toFixed(2)}).`);
+      return;
+    }
+
+    const optionalNumber = (field: string) => {
+      const value = String(payload[field] ?? "").trim();
+      if (value) payload[field] = Number(value);
+      else payload[field] = null;
+    };
+    payload.cost = costNum;
+    payload.price = priceNum;
+    payload.minimumStock = Number(payload.minimumStock || 0);
+    optionalNumber("weightKg");
+    optionalNumber("lengthCm");
+    optionalNumber("widthCm");
+    optionalNumber("heightCm");
+    optionalNumber("dropshippingPrice");
+    optionalNumber("suggestedDropshippingPrice");
+    if (productImage && productImage !== product.imageUrl) {
+      payload.imageDataUrl = productImage;
+    }
+
+    setSaving(true);
+    try {
+      const success = await onSave(product.id, payload);
+      if (success) onClose();
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal-card modal-card-wide max-w-2xl w-full" onClick={(e) => e.stopPropagation()}>
+        <header className="modal-header flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
+          <div>
+            <h2 className="font-bold text-base text-slate-900 dark:text-white">Editar Producto</h2>
+            <p className="text-xs text-slate-500">Modifica los detalles, precios y especificaciones del producto</p>
+          </div>
+          <button type="button" className="close-button" onClick={onClose}>✕</button>
+        </header>
+
+        <form onSubmit={(e) => void submit(e)} className="modal-form space-y-4 pt-4">
+          {productFormError && (
+            <div className="p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 rounded-lg text-xs text-red-600 dark:text-red-400 flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 flex-shrink-0" />
+              <span>{productFormError}</span>
+            </div>
+          )}
+
+          <div className="form-row">
+            <label>
+              SKU (Código Único) <span className="text-red-500">*</span>
+              <input name="sku" defaultValue={product.sku} required placeholder="ej. PROD-001" />
+            </label>
+            <label>
+              Nombre del producto <span className="text-red-500">*</span>
+              <input name="name" defaultValue={product.name} required placeholder="ej. Camiseta Polo Algodón" />
+            </label>
+          </div>
+
+          <div className="form-row">
+            <label>
+              Categoría
+              <input name="category" defaultValue={product.category || ""} placeholder="ej. Ropa, Electrónica..." />
+            </label>
+            <label>
+              Marca
+              <input name="brand" defaultValue={product.brand || ""} placeholder="ej. Nike, Generic..." />
+            </label>
+          </div>
+
+          <label>
+            Descripción
+            <textarea name="description" defaultValue={product.description || ""} rows={2} placeholder="Descripción del producto..." className="w-full text-xs p-2 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900" />
+          </label>
+
+          <label>
+            Imagen del producto <small>(máx. 2MB - .webp)</small>
+            <input
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              onChange={(event) => {
+                const file = event.currentTarget.files?.[0];
+                setImageError("");
+                if (!file) return;
+                if (file.size > 2 * 1024 * 1024) {
+                  setImageError("La imagen no puede superar 2 MB.");
+                  event.currentTarget.value = "";
+                  return;
+                }
+                const reader = new FileReader();
+                reader.onload = () => setProductImage(String(reader.result));
+                reader.onerror = () => setImageError("No se pudo leer la imagen.");
+                reader.readAsDataURL(file);
+              }}
+            />
+            {imageError && <small className="field-error text-red-500 text-xs mt-1 block">{imageError}</small>}
+            {productImage && (
+              <Image
+                className="product-image-preview mt-2 rounded-lg border border-slate-200 dark:border-slate-800"
+                src={productImage}
+                alt="Vista previa del producto"
+                width={96}
+                height={96}
+                unoptimized
+              />
+            )}
+          </label>
+
+          <h3 className="form-section-title text-xs font-bold uppercase tracking-wider text-slate-500 mt-4 mb-2">Peso y Medidas del Paquete</h3>
+          <div className="form-row form-row-four">
+            <label>
+              Peso (kg) <span className="text-red-500">*</span>
+              <input name="weightKg" type="number" min="0.001" step="0.001" defaultValue={product.weightKg ?? 1} required placeholder="0.5" />
+            </label>
+            <label>
+              Largo (cm) <span className="text-red-500">*</span>
+              <input name="lengthCm" type="number" min="0.01" step="0.01" defaultValue={product.lengthCm ?? 15} required placeholder="10" />
+            </label>
+            <label>
+              Ancho (cm) <span className="text-red-500">*</span>
+              <input name="widthCm" type="number" min="0.01" step="0.01" defaultValue={product.widthCm ?? 15} required placeholder="10" />
+            </label>
+            <label>
+              Alto (cm) <span className="text-red-500">*</span>
+              <input name="heightCm" type="number" min="0.01" step="0.01" defaultValue={product.heightCm ?? 15} required placeholder="5" />
+            </label>
+          </div>
+
+          <h3 className="form-section-title text-xs font-bold uppercase tracking-wider text-slate-500 mt-4 mb-2">Precios y Márgenes</h3>
+          <div className="form-row">
+            <label>
+              Costo de Adquisición (USD) <span className="text-red-500">*</span>
+              <input
+                name="cost"
+                type="number"
+                min="0"
+                step="0.01"
+                required
+                value={costVal}
+                onChange={(e) => setCostVal(e.target.value)}
+              />
+            </label>
+            <label>
+              Precio Venta al Público PVP (USD) <span className="text-red-500">*</span>
+              <input
+                name="price"
+                type="number"
+                min="0"
+                step="0.01"
+                required
+                value={priceVal}
+                onChange={(e) => setPriceVal(e.target.value)}
+              />
+              {Number(priceVal) > 0 && (
+                <small className="field-help font-medium text-emerald-600 dark:text-emerald-400 mt-1 block">
+                  Ganancia estimada: +${(Number(priceVal) - Number(costVal)).toFixed(2)} ({Number(priceVal) > 0 ? (((Number(priceVal) - Number(costVal)) / Number(priceVal)) * 100).toFixed(1) : 0}% margen)
+                </small>
+              )}
+            </label>
+          </div>
+
+          <div className="form-row">
+            <label>
+              Precio para Dropshipping (USD) <small>(opcional)</small>
+              <input
+                name="dropshippingPrice"
+                type="number"
+                min="0"
+                step="0.01"
+                value={dropshippingPrice}
+                placeholder="Precio al revendedor"
+                onChange={(event) => {
+                  const value = event.currentTarget.value;
+                  setDropshippingPrice(value);
+                  setProductFormError("");
+                  if (!suggestedPriceEdited) {
+                    const amount = Number(value);
+                    setSuggestedDropshippingPrice(
+                      value && Number.isFinite(amount)
+                        ? (amount + 5).toFixed(2)
+                        : "",
+                    );
+                  }
+                }}
+              />
+            </label>
+            <label>
+              Precio Sugerido Dropshipping (USD) <small>(opcional)</small>
+              <input
+                name="suggestedDropshippingPrice"
+                type="number"
+                min="0"
+                step="0.01"
+                value={suggestedDropshippingPrice}
+                placeholder="PVP sugerido revendedor"
+                onChange={(event) => {
+                  setSuggestedPriceEdited(true);
+                  setSuggestedDropshippingPrice(event.currentTarget.value);
+                }}
+              />
+            </label>
+          </div>
+
+          <div className="form-row">
+            <label>
+              Stock Mínimo de Alerta
+              <input name="minimumStock" type="number" min="0" defaultValue={product.minimum ?? 0} />
+            </label>
+          </div>
+
+          <div className="modal-actions flex items-center justify-end gap-2 pt-4 border-t border-slate-200 dark:border-slate-800">
+            <button type="button" className="secondary-button" onClick={onClose}>
+              Cancelar
+            </button>
+            <button type="submit" className="primary-button flex items-center gap-2 justify-center" disabled={saving}>
+              {saving ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Guardando...</span>
+                </>
+              ) : (
+                "Guardar cambios"
+              )}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }

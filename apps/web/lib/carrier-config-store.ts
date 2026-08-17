@@ -258,8 +258,21 @@ export function calculateCarrierFreightRate(params: {
   // Insurance cost charged to client: 1.5% of insured value
   const insuranceCost = insuredValue > 0 ? Math.round(insuredValue * 0.015 * 100) / 100 : 0;
 
-  const trajetixProfitTotal = freightMargin + codMargin + insuranceCost;
-  const finalPriceToClient = laarTotalCost + trajetixProfitTotal;
+  // Client prices before VAT
+  const clientFreightCost = laarFreightCost + freightMargin;
+  const clientCodCost = laarCodCost + codMargin;
+  const clientInsuranceCost = insuranceCost;
+
+  // Subtotal before VAT = (tarifa base + kg extra + seguro + gestión de recaudo)
+  const subtotalClient = Math.round((clientFreightCost + clientCodCost + clientInsuranceCost) * 100) / 100;
+
+  // IVA (15%) = Subtotal × 15%
+  const ivaCost = Math.round(subtotalClient * 0.15 * 100) / 100;
+
+  // Total final price to client (Subtotal + IVA 15%)
+  const finalPriceToClient = Math.round((subtotalClient + ivaCost) * 100) / 100;
+
+  const trajetixProfitTotal = freightMargin + codMargin;
 
   return {
     zoneKey,
@@ -268,10 +281,19 @@ export function calculateCarrierFreightRate(params: {
     laarFreightCost,
     laarCodCost,
     laarTotalCost,
+    freightMarginPercent: isZeroMarginUser ? 0 : config.rates.trajetixFreightMarginPercent,
     freightMargin,
+    codMarginPercent: isZeroMarginUser ? 0 : config.rates.trajetixCodMarginPercent,
     codMargin,
+    fixedSurcharge: config.rates.fixedSurcharge || 0,
     insuranceCost,
     insuredValue,
+    clientFreightCost,
+    clientCodCost,
+    clientInsuranceCost,
+    subtotalClient,
+    ivaRate: 0.15,
+    ivaCost,
     trajetixProfitTotal,
     finalPriceToClient,
     isZeroMarginApplied: isZeroMarginUser,

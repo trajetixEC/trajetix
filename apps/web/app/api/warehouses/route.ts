@@ -9,6 +9,8 @@ const warehouseInput = z.object({
   name: z.string().trim().min(2).max(120),
   city: z.string().trim().min(2).max(100),
   address: z.string().trim().min(4).max(300),
+  latitude: z.number().optional(),
+  longitude: z.number().optional(),
   timezone: z.string().trim().min(3).max(60).default("America/Guayaquil"),
 });
 
@@ -20,16 +22,32 @@ export async function GET() {
       include: { balances: { select: { onHand: true, reserved: true, productId: true } } },
       orderBy: { createdAt: "asc" },
     });
-    return Response.json(warehouses.map((warehouse) => ({
-      id: warehouse.id,
-      code: warehouse.code,
-      name: warehouse.name,
-      timezone: warehouse.timezone,
-      city: (warehouse.address as { city?: string }).city ?? "",
-      address: (warehouse.address as { line1?: string }).line1 ?? "",
-      products: new Set(warehouse.balances.filter((balance) => Number(balance.onHand) > 0).map((balance) => balance.productId)).size,
-      stock: warehouse.balances.reduce((sum, balance) => sum + Number(balance.onHand) - Number(balance.reserved), 0),
-    })));
+    return Response.json(
+      warehouses.map((warehouse) => {
+        const addr = (warehouse.address as { city?: string; line1?: string; latitude?: number; longitude?: number; lat?: number; lng?: number }) || {};
+        const rawLat = addr.latitude ?? addr.lat;
+        const rawLng = addr.longitude ?? addr.lng;
+        const lat = typeof rawLat === "number" && !isNaN(rawLat) && rawLat !== 0 ? rawLat : null;
+        const lng = typeof rawLng === "number" && !isNaN(rawLng) && rawLng !== 0 ? rawLng : null;
+        return {
+          id: warehouse.id,
+          code: warehouse.code,
+          name: warehouse.name,
+          timezone: warehouse.timezone,
+          city: addr.city ?? "",
+          address: addr.line1 ?? "",
+          latitude: lat,
+          longitude: lng,
+          products: new Set(warehouse.balances.filter((balance) => Number(balance.onHand) > 0).map((balance) => balance.productId)).size,
+          stock: warehouse.balances.reduce((sum, balance) => sum + Number(balance.onHand) - Number(balance.reserved), 0),
+        };
+      }),
+      {
+        headers: {
+          "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+        },
+      },
+    );
   } catch (error) { return tenantError(error); }
 }
 
@@ -43,7 +61,14 @@ export async function POST(request: Request) {
       code: parsed.data.code,
       name: parsed.data.name,
       timezone: parsed.data.timezone,
-      address: { city: parsed.data.city, line1: parsed.data.address },
+      address: {
+        city: parsed.data.city,
+        line1: parsed.data.address,
+        latitude: parsed.data.latitude ?? null,
+        longitude: parsed.data.longitude ?? null,
+        lat: parsed.data.latitude ?? null,
+        lng: parsed.data.longitude ?? null,
+      },
     }});
     return Response.json({ id: warehouse.id }, { status: 201 });
   } catch (error) {
