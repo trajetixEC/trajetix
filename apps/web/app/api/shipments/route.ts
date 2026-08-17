@@ -257,13 +257,24 @@ export async function POST(request: Request) {
       });
     }
 
+    // Fetch tenant Store Name (Organización) for origin sender name
+    const tenant = await getPrisma().tenant.findUnique({
+      where: { id: tenantId },
+      select: { displayName: true, legalName: true },
+    });
+
+    const storeSenderName =
+      (tenant?.displayName && tenant.displayName.trim() !== "" && tenant.displayName !== "Mi organización")
+        ? tenant.displayName.trim()
+        : (tenant?.legalName && tenant.legalName.trim() !== "" ? tenant.legalName.trim() : data.senderName);
+
     // 4. GENERAR GUÍA CON LA TRANSPORTADORA (LAAR COURIER)
     let label;
     try {
       label = await createLaarShipment({
         reference: data.reference || `TRJ${Date.now()}`,
         origin: {
-          name: data.senderName,
+          name: storeSenderName,
           phone: data.senderPhone,
           city: data.originCity,
           line1: data.originAddress,
@@ -336,7 +347,7 @@ export async function POST(request: Request) {
           service: quote.service,
           trackingNumber: label.trackingNumber.trim(),
           origin: {
-            name: data.senderName,
+            name: storeSenderName,
             phone: data.senderPhone,
             city: data.originCity,
             line1: data.originAddress,

@@ -138,7 +138,7 @@ export async function createLaarShipment(
     costoflete: 0,
     costoproducto: isCod ? codAmount : 0,
     tipocobro: isCod ? 1 : 0,
-    comentario: "Despacho Trajetix ERP",
+    comentario: input.origin.name ? `Tienda: ${input.origin.name}` : "Despacho Trajetix ERP",
     fechaPedido: "",
     retorno: {
       tipoServicio: "",

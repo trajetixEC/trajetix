@@ -413,7 +413,7 @@ export function NewShipmentModule({
   function chooseWarehouse(id: string) {
     const warehouse = warehouses.find((item) => item.id === id);
     const phone = (warehouse as { phone?: string })?.phone || (user as { phone?: string })?.phone || "";
-    const storeName = user?.tenant || warehouse?.name || "";
+    const storeName = (user?.tenant && user.tenant !== "Mi organización" ? user.tenant : "") || user?.tenant || warehouse?.name || "";
     setDraft((current) => ({
       ...current,
       warehouseId: id,

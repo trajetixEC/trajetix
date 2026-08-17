@@ -56,8 +56,8 @@ export default function RegisterPage() {
             <input name="name" required minLength={2} />
           </label>
           <label>
-            Organización
-            <input name="organization" required minLength={2} />
+            Nombre de la tienda
+            <input name="organization" required minLength={2} placeholder="ej. Mi Tienda Express" />
           </label>
           <label>
             Correo electrónico
