@@ -79,6 +79,7 @@ type Warehouse = {
   name: string;
   city: string;
   address: string;
+  phone?: string;
   latitude?: number | null | undefined;
   longitude?: number | null | undefined;
   timezone: string;
@@ -665,6 +666,13 @@ export function DashboardApp({
               user={user}
               warehouses={store.warehouses}
               products={store.products}
+              onNavigateToWarehouses={(warehouseId?: string) => {
+                setSection("Bodegas");
+                if (warehouseId) {
+                  const targetW = store.warehouses.find((w) => w.id === warehouseId);
+                  if (targetW) setEditingWarehouse(targetW);
+                }
+              }}
               onCreated={async () => {
                 await loadOperationalData();
                 setSection("Mis envíos");
@@ -1541,7 +1549,7 @@ function Warehouses({
             </div>
             <h2>{warehouse.name}</h2>
             <p>{warehouse.address}</p>
-            <small>{warehouse.city}</small>
+            <small>{warehouse.city} {warehouse.phone ? `· 📞 ${warehouse.phone}` : ""}</small>
             <div>
               <span>
                 <b>{warehouse.products}</b> productos
@@ -1649,6 +1657,18 @@ function EditWarehouseModal({
               defaultValue={address}
               onChange={(e) => setAddress(e.target.value)}
               placeholder="Calle, número y referencia"
+            />
+          </label>
+
+          <label className="mb-3 block text-xs font-semibold text-slate-700 dark:text-slate-200">
+            Teléfono / WhatsApp de la Bodega <span className="text-red-500">*</span>
+            <input
+              name="phone"
+              required
+              minLength={5}
+              defaultValue={warehouse.phone || ""}
+              placeholder="Ej. 0991234567"
+              className="w-full p-2.5 text-sm bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-slate-900 dark:text-slate-100 font-mono focus:ring-2 focus:ring-red-500/20 focus:border-red-500 mt-1"
             />
           </label>
 
@@ -2304,6 +2324,17 @@ function EntityModal({
                   placeholder="Calle, número y referencia"
                   value={warehouseAddress}
                   onChange={(e) => setWarehouseAddress(e.target.value)}
+                />
+              </label>
+
+              <label className="mb-3 block text-xs font-semibold text-slate-700 dark:text-slate-200">
+                Teléfono / WhatsApp de la Bodega <span className="text-red-500">*</span>
+                <input
+                  name="phone"
+                  required
+                  minLength={5}
+                  placeholder="Ej. 0991234567"
+                  className="w-full p-2.5 text-sm bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-slate-900 dark:text-slate-100 font-mono focus:ring-2 focus:ring-red-500/20 focus:border-red-500 mt-1"
                 />
               </label>
 

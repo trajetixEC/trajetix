@@ -118,8 +118,30 @@ const ZERO_MARGIN_USERS_KEY = "trajetix_zero_margin_users";
 export function loadCarrierConfig(carrierKey: string = "laar"): CarrierConfig {
   if (typeof window === "undefined") return DEFAULT_LAAR_CONFIG;
   try {
-    const raw = localStorage.getItem(`${STORAGE_KEY}_${carrierKey}`);
-    if (raw) return JSON.parse(raw) as CarrierConfig;
+    const raw =
+      localStorage.getItem(`${STORAGE_KEY}_${carrierKey}`) ||
+      localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw) as CarrierConfig;
+      return {
+        ...DEFAULT_LAAR_CONFIG,
+        ...parsed,
+        rates: {
+          ...DEFAULT_LAAR_CONFIG.rates,
+          ...(parsed.rates || {}),
+          trajetixFreightMarginPercent:
+            typeof parsed.rates?.trajetixFreightMarginPercent === "number" &&
+            parsed.rates.trajetixFreightMarginPercent > 0
+              ? parsed.rates.trajetixFreightMarginPercent
+              : 15,
+          trajetixCodMarginPercent:
+            typeof parsed.rates?.trajetixCodMarginPercent === "number" &&
+            parsed.rates.trajetixCodMarginPercent > 0
+              ? parsed.rates.trajetixCodMarginPercent
+              : 10,
+        },
+      };
+    }
   } catch (err) {
     console.error("Error al cargar configuración de transportadora:", err);
   }
@@ -133,39 +155,41 @@ export function saveCarrierConfig(config: CarrierConfig): void {
       `${STORAGE_KEY}_${config.general.carrierKey}`,
       JSON.stringify(config)
     );
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
   } catch (err) {
     console.error("Error al guardar configuración de transportadora:", err);
   }
 }
 
-export const DEFAULT_ZERO_MARGIN_USERS = [
-  "cisnerosgranda14@gmail.com",
-  "cisnerosgranda",
-];
-
 export function getZeroMarginUsers(): string[] {
-  if (typeof window === "undefined") return DEFAULT_ZERO_MARGIN_USERS;
+  if (typeof window === "undefined") return [];
   try {
     const raw = localStorage.getItem(ZERO_MARGIN_USERS_KEY);
-    if (raw) {
+    if (raw !== null) {
       const parsed = JSON.parse(raw) as string[];
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      if (Array.isArray(parsed)) {
+        return parsed
+          .map((item) => String(item || "").trim().toLowerCase())
+          .filter(Boolean);
+      }
     }
   } catch (err) {
     console.error("Error al leer usuarios sin margen:", err);
   }
-  return DEFAULT_ZERO_MARGIN_USERS;
+  return [];
 }
 
 export function setZeroMarginUser(userEmailOrId: string, enable: boolean): void {
   if (typeof window === "undefined") return;
+  const cleanEmail = userEmailOrId.trim().toLowerCase();
+  if (!cleanEmail) return;
   try {
     const current = getZeroMarginUsers();
     let updated: string[];
     if (enable) {
-      updated = Array.from(new Set([...current, userEmailOrId]));
+      updated = Array.from(new Set([...current, cleanEmail]));
     } else {
-      updated = current.filter((item) => item !== userEmailOrId);
+      updated = current.filter((item) => item !== cleanEmail && !item.includes(cleanEmail) && !cleanEmail.includes(item));
     }
     localStorage.setItem(ZERO_MARGIN_USERS_KEY, JSON.stringify(updated));
   } catch (err) {
@@ -252,14 +276,26 @@ export function calculateCarrierFreightRate(params: {
 
   const laarTotalCost = laarFreightCost + laarCodCost + config.rates.fixedSurcharge;
 
-  // Trajetix Profit Margins calculation
+  // Trajetix Profit Margins calculation (Default 15% freight, 10% COD)
   let freightMargin = 0;
   let codMargin = 0;
 
+  const freightMarginPercent =
+    typeof config.rates?.trajetixFreightMarginPercent === "number" &&
+    config.rates.trajetixFreightMarginPercent > 0
+      ? config.rates.trajetixFreightMarginPercent
+      : 15;
+
+  const codMarginPercent =
+    typeof config.rates?.trajetixCodMarginPercent === "number" &&
+    config.rates.trajetixCodMarginPercent > 0
+      ? config.rates.trajetixCodMarginPercent
+      : 10;
+
   if (!isZeroMarginUser) {
-    freightMargin = (laarFreightCost * config.rates.trajetixFreightMarginPercent) / 100;
+    freightMargin = Math.round(((laarFreightCost * freightMarginPercent) / 100) * 100) / 100;
     if (laarCodCost > 0) {
-      codMargin = (laarCodCost * config.rates.trajetixCodMarginPercent) / 100;
+      codMargin = Math.round(((laarCodCost * codMarginPercent) / 100) * 100) / 100;
     }
   }
 

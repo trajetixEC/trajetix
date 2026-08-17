@@ -44,6 +44,7 @@ type Warehouse = {
   name: string;
   city: string;
   address: string;
+  phone?: string;
 };
 
 type Product = {
@@ -109,34 +110,11 @@ type Draft = {
   reference: string;
 };
 
+type AdminBreakdown = ReturnType<typeof calculateCarrierFreightRate>;
+
 type SelectedItem = {
   quantity: number;
   unitPrice: number;
-};
-
-type AdminBreakdown = {
-  zoneKey: string;
-  zoneName: string;
-  laarCityCode: string;
-  laarFreightCost: number;
-  laarCodCost: number;
-  laarTotalCost: number;
-  freightMarginPercent: number;
-  freightMargin: number;
-  codMarginPercent: number;
-  codMargin: number;
-  fixedSurcharge: number;
-  trajetixProfitTotal: number;
-  clientFreightCost: number;
-  clientCodCost: number;
-  clientInsuranceCost: number;
-  subtotalClient: number;
-  ivaRate: number;
-  ivaCost: number;
-  finalPriceToClient: number;
-  isZeroMarginApplied: boolean;
-  insuranceCost: number;
-  insuredValue: number;
 };
 
 function money(amount: number) {
@@ -202,11 +180,13 @@ export function NewShipmentModule({
   user,
   warehouses: initialWarehouses,
   products: initialProducts,
+  onNavigateToWarehouses,
   onCreated,
 }: {
   user?: { name: string; email?: string; role: string; tenant: string; permissions: string[] };
   warehouses: Warehouse[];
   products: Product[];
+  onNavigateToWarehouses?: (warehouseId?: string) => void;
   onCreated: () => Promise<void>;
 }) {
   const [step, setStep] = useState(1);
@@ -527,6 +507,9 @@ export function NewShipmentModule({
         return "Por favor ingresa el nombre o empresa del remitente (origen).";
       }
       if (!draft.senderPhone || draft.senderPhone.trim().length < 5) {
+        if (draft.originMode === "warehouse") {
+          return "La bodega seleccionada no tiene un número de teléfono/WhatsApp configurado. Por favor haz clic en 'Configurar teléfono en Bodegas' para agregarlo.";
+        }
         return "Por favor ingresa un número de teléfono/WhatsApp válido para el remitente.";
       }
       if (!draft.originCity) {
@@ -598,12 +581,13 @@ export function NewShipmentModule({
       // Calculate rate breakdown for LAAR Courier
       const laarConfig = loadCarrierConfig("laar");
       const zeroMarginUsers = getZeroMarginUsers();
-      const currentUserIdentifier = (user?.email || user?.name || "").toLowerCase();
-      const isZeroMargin = zeroMarginUsers.some(
-        (u) =>
-          u.toLowerCase() === currentUserIdentifier ||
-          currentUserIdentifier.includes(u.toLowerCase()) ||
-          currentUserIdentifier.includes("cisnerosgranda")
+      const currentUserIdentifier = (user?.email || user?.name || "").trim().toLowerCase();
+      const isZeroMargin = Boolean(
+        currentUserIdentifier &&
+          zeroMarginUsers.some((u) => {
+            const cleanU = u.trim().toLowerCase();
+            return cleanU && currentUserIdentifier === cleanU;
+          })
       );
 
       const breakdown = calculateCarrierFreightRate({
@@ -935,18 +919,33 @@ export function NewShipmentModule({
                     <div className="text-xs text-slate-700 dark:text-slate-300 space-y-2 pt-1">
                       <div>📍 <strong>Ciudad Origen:</strong> {draft.originCity}</div>
                       <div>🗺️ <strong>Dirección Exacta:</strong> {draft.originAddress}</div>
-                      <div className="pt-2 border-t border-emerald-200/40 dark:border-emerald-800/40">
-                        <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 block mb-1">
-                          📞 Teléfono / WhatsApp Remitente *
-                        </label>
-                        <input
-                          type="text"
-                          value={draft.senderPhone}
-                          placeholder="Ej: 0991234567 (Número de la tienda)"
-                          onChange={(e) => update("senderPhone", e.target.value)}
-                          className="w-full p-2 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-slate-900 dark:text-slate-100 font-mono focus:ring-2 focus:ring-red-500/20 focus:border-red-500"
-                        />
-                      </div>
+                      
+                      {draft.senderPhone && draft.senderPhone.trim().length >= 5 ? (
+                        <div className="pt-2 border-t border-emerald-200/40 dark:border-emerald-800/40 flex items-center gap-2 text-emerald-800 dark:text-emerald-300 font-medium">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
+                          <span><strong>Teléfono de Bodega:</strong> {draft.senderPhone}</span>
+                        </div>
+                      ) : (
+                        <div className="pt-2 border-t border-amber-200/60 dark:border-amber-800/60 space-y-2">
+                          <div className="p-2.5 bg-amber-500/10 dark:bg-amber-950/40 border border-amber-500/20 rounded-lg flex items-start gap-2 text-xs text-amber-800 dark:text-amber-300">
+                            <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+                            <div className="space-y-1">
+                              <p className="font-semibold">Esta bodega no tiene un número de teléfono/WhatsApp configurado.</p>
+                              <p className="text-[11px] opacity-90">Debes registrar el teléfono de la bodega en la pestaña de Bodegas para poder realizar envíos con esta ubicación.</p>
+                            </div>
+                          </div>
+                          {onNavigateToWarehouses && (
+                            <button
+                              type="button"
+                              onClick={() => onNavigateToWarehouses(draft.warehouseId)}
+                              className="w-full py-2 px-3 bg-amber-500 hover:bg-amber-600 text-white font-semibold text-xs rounded-lg transition-colors flex items-center justify-center gap-2 shadow-sm"
+                            >
+                              <span>⚙️ Configurar teléfono en Bodegas</span>
+                              <ArrowRight className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                 ) : (

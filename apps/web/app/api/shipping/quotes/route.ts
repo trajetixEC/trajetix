@@ -111,12 +111,13 @@ export async function POST(request: Request) {
           }));
         } catch {
           const zeroMarginUsers = getZeroMarginUsers();
-          const userIdent = (user?.email || "").toLowerCase();
-          const isZeroMarginUser = zeroMarginUsers.some(
-            (u) =>
-              u.toLowerCase() === userIdent ||
-              userIdent.includes(u.toLowerCase()) ||
-              userIdent.includes("cisnerosgranda")
+          const userIdent = (user?.email || "").trim().toLowerCase();
+          const isZeroMarginUser = Boolean(
+            userIdent &&
+              zeroMarginUsers.some((u) => {
+                const cleanU = u.trim().toLowerCase();
+                return cleanU && userIdent === cleanU;
+              })
           );
 
           const weightTotal = parsed.data.parcels.reduce(

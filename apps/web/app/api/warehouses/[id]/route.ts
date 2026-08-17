@@ -8,6 +8,7 @@ const warehouseUpdateInput = z.object({
   name: z.string().trim().min(2).max(120).optional(),
   city: z.string().trim().min(2).max(100).optional(),
   address: z.string().trim().min(4).max(300).optional(),
+  phone: z.string().trim().min(5, "El teléfono de la bodega es obligatorio").max(40).optional(),
   latitude: z.number().optional(),
   longitude: z.number().optional(),
   active: z.boolean().optional(),
@@ -23,7 +24,7 @@ export async function PUT(
     const parsed = warehouseUpdateInput.safeParse(await request.json());
     if (!parsed.success) {
       return Response.json(
-        { error: "Datos de bodega inválidos", details: parsed.error.flatten() },
+        { error: "El teléfono de la bodega es obligatorio y debe contener al menos 5 dígitos", details: parsed.error.flatten() },
         { status: 400 }
       );
     }
@@ -43,6 +44,7 @@ export async function PUT(
       ...currentAddress,
       ...(parsed.data.city ? { city: parsed.data.city } : {}),
       ...(parsed.data.address ? { line1: parsed.data.address } : {}),
+      ...(parsed.data.phone !== undefined ? { phone: parsed.data.phone } : {}),
       ...(hasValidLat ? { latitude: parsed.data.latitude, lat: parsed.data.latitude } : {}),
       ...(hasValidLng ? { longitude: parsed.data.longitude, lng: parsed.data.longitude } : {}),
     };

@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { z } from "zod";
+import { ShipmentStatus } from "../../../generated/client";
 import { getPrisma } from "../../../lib/prisma";
 import { requireTenant, tenantError } from "../../../lib/tenant";
 import {
@@ -171,34 +172,89 @@ export async function POST(request: Request) {
       );
     }
 
-    // 3. SECUENCIA RIGUROSA: VERIFICAR Y DEBITAR FLETE PARA TODOS LOS ENVÍOS (COD Y PREPAGO)
+    // 3. SECUENCIA RIGUROSA: VERIFICAR Y DEBITAR FLETE CON REGLAS DE CORTESÍA COD Y BILLETERA
     const freightCostMinor = BigInt(quote.amountMinor);
 
     // Ensure wallet exists
-    await getPrisma().wallet.upsert({
+    const currentWallet = await getPrisma().wallet.upsert({
       where: { tenantId },
       update: {},
       create: { tenantId },
     });
 
-    // Atomic debit: Ensures balance >= freight cost strictly before calling external carrier API
-    const debitResult = await getPrisma().wallet.updateMany({
-      where: { tenantId, balanceMinor: { gte: freightCostMinor } },
-      data: { balanceMinor: { decrement: freightCostMinor } },
-    });
+    const isCodShipment = typeof data.cod === "number" && data.cod > 0;
+    const availableBalanceMinor = currentWallet.balanceMinor ?? 0n;
+    const hasSufficientBalance = availableBalanceMinor >= freightCostMinor;
 
-    if (debitResult.count !== 1) {
-      const wallet = await getPrisma().wallet.findUnique({ where: { tenantId }, select: { balanceMinor: true } });
-      const available = Number(wallet?.balanceMinor ?? 0) / 100;
-      const required = quote.amountMinor / 100;
-      return Response.json(
-        {
-          error: `Saldo insuficiente en tu billetera ($${available.toFixed(2)}). El costo del flete para esta guía es de $${required.toFixed(2)}. Por favor realiza una recarga de saldo en la sección Finanzas para poder generar la guía.`,
-          availableBalance: available,
-          requiredAmount: required,
+    if (!hasSufficientBalance) {
+      // Regla A: Si NO es una guía COD (es prepago / sin recaudo), exige saldo suficiente obligatoriamente
+      if (!isCodShipment) {
+        const available = Number(availableBalanceMinor) / 100;
+        const required = quote.amountMinor / 100;
+        return Response.json(
+          {
+            error: `Saldo insuficiente en tu billetera ($${available.toFixed(2)}). Las guías sin recaudo (prepago) requieren saldo disponible de $${required.toFixed(2)}. Por favor realiza una recarga en la sección Finanzas.`,
+            availableBalance: available,
+            requiredAmount: required,
+          },
+          { status: 402 }
+        );
+      }
+
+      // Regla B: Mecanismo de Cortesía para Guías COD cuando no hay saldo suficiente
+      // B.1: Si acumula 3 o más devoluciones (RETURNED) en guías COD, bloquea la creación hasta saldar deuda
+      const returnedCodCount = await getPrisma().shipment.count({
+        where: {
+          tenantId,
+          codMinor: { gt: 0n },
+          status: ShipmentStatus.RETURNED,
         },
-        { status: 402 }
-      );
+      });
+
+      const currentDebt = Math.abs(Number(availableBalanceMinor) / 100);
+
+      if (returnedCodCount >= 3) {
+        return Response.json(
+          {
+            error: `Acceso a guías COD suspendido: Has acumulado ${returnedCodCount} devoluciones en envíos con recaudo sin saldo disponible. Debes saldar la deuda de tu billetera ($${currentDebt.toFixed(2)}) realizando una recarga en la sección Finanzas para poder seguir creando guías COD.`,
+            debtAmount: currentDebt,
+            returnedCodCount,
+          },
+          { status: 402 }
+        );
+      }
+
+      // B.2: Permite máximo 5 guías COD de cortesía sin saldo disponible (en tránsito / activas / en deuda)
+      const courtesyCodCount = await getPrisma().shipment.count({
+        where: {
+          tenantId,
+          codMinor: { gt: 0n },
+          status: { notIn: [ShipmentStatus.DELIVERED, ShipmentStatus.CANCELLED] },
+        },
+      });
+
+      if (courtesyCodCount >= 5) {
+        return Response.json(
+          {
+            error: `Límite de cortesía alcanzado: Has creado ${courtesyCodCount} guías COD de cortesía sin saldo disponible. Para continuar generando envíos, debes saldar la deuda acumulada de tu billetera ($${currentDebt.toFixed(2)}) realizando una recarga en la sección Finanzas.`,
+            debtAmount: currentDebt,
+            courtesyCodCount,
+          },
+          { status: 402 }
+        );
+      }
+
+      // Si pasa las dos reglas de cortesía, decrementa el saldo de la billetera (entrando en saldo negativo/deuda)
+      await getPrisma().wallet.update({
+        where: { tenantId },
+        data: { balanceMinor: { decrement: freightCostMinor } },
+      });
+    } else {
+      // Saldo suficiente: decremento de billetera
+      await getPrisma().wallet.update({
+        where: { tenantId },
+        data: { balanceMinor: { decrement: freightCostMinor } },
+      });
     }
 
     // 4. GENERAR GUÍA CON LA TRANSPORTADORA (LAAR COURIER)
@@ -254,12 +310,13 @@ export async function POST(request: Request) {
         0
       );
       const zeroMarginUsers = getZeroMarginUsers();
-      const userIdent = (user?.email || "").toLowerCase();
-      const isZeroMarginUser = zeroMarginUsers.some(
-        (u) =>
-          u.toLowerCase() === userIdent ||
-          userIdent.includes(u.toLowerCase()) ||
-          userIdent.includes("cisnerosgranda")
+      const userIdent = (user?.email || "").trim().toLowerCase();
+      const isZeroMarginUser = Boolean(
+        userIdent &&
+          zeroMarginUsers.some((u) => {
+            const cleanU = u.trim().toLowerCase();
+            return cleanU && userIdent === cleanU;
+          })
       );
 
       const breakdown = calculateCarrierFreightRate({
@@ -364,7 +421,7 @@ export async function POST(request: Request) {
         data: {
           tenantId,
           type: "DEBIT",
-          amountMinor: -freightCostMinor,
+          amountMinor: freightCostMinor,
           balanceBeforeMinor: BigInt(balanceBefore),
           balanceAfterMinor: BigInt(balanceAfter),
           description: `Pago de flete para guía ${created.trackingNumber} (${data.cod > 0 ? "Contra-entrega" : "Prepago"})`,

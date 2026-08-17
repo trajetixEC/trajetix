@@ -9,6 +9,7 @@ const warehouseInput = z.object({
   name: z.string().trim().min(2).max(120),
   city: z.string().trim().min(2).max(100),
   address: z.string().trim().min(4).max(300),
+  phone: z.string().trim().min(5, "El teléfono de la bodega es obligatorio").max(40),
   latitude: z.number().optional(),
   longitude: z.number().optional(),
   timezone: z.string().trim().min(3).max(60).default("America/Guayaquil"),
@@ -24,7 +25,7 @@ export async function GET() {
     });
     return Response.json(
       warehouses.map((warehouse) => {
-        const addr = (warehouse.address as { city?: string; line1?: string; latitude?: number; longitude?: number; lat?: number; lng?: number }) || {};
+        const addr = (warehouse.address as { city?: string; line1?: string; phone?: string; latitude?: number; longitude?: number; lat?: number; lng?: number }) || {};
         const rawLat = addr.latitude ?? addr.lat;
         const rawLng = addr.longitude ?? addr.lng;
         const lat = typeof rawLat === "number" && !isNaN(rawLat) && rawLat !== 0 ? rawLat : null;
@@ -36,6 +37,7 @@ export async function GET() {
           timezone: warehouse.timezone,
           city: addr.city ?? "",
           address: addr.line1 ?? "",
+          phone: addr.phone ?? "",
           latitude: lat,
           longitude: lng,
           products: new Set(warehouse.balances.filter((balance) => Number(balance.onHand) > 0).map((balance) => balance.productId)).size,
@@ -55,7 +57,7 @@ export async function POST(request: Request) {
   try {
     const { tenantId } = await requireTenant("warehouses:create");
     const parsed = warehouseInput.safeParse(await request.json());
-    if (!parsed.success) return Response.json({ error: "Bodega inválida", details: parsed.error.flatten() }, { status: 400 });
+    if (!parsed.success) return Response.json({ error: "El teléfono de la bodega es obligatorio y debe contener al menos 5 dígitos", details: parsed.error.flatten() }, { status: 400 });
     const warehouse = await getPrisma().warehouse.create({ data: {
       tenantId,
       code: parsed.data.code,
@@ -64,6 +66,7 @@ export async function POST(request: Request) {
       address: {
         city: parsed.data.city,
         line1: parsed.data.address,
+        phone: parsed.data.phone,
         latitude: parsed.data.latitude ?? null,
         longitude: parsed.data.longitude ?? null,
         lat: parsed.data.latitude ?? null,
