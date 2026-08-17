@@ -448,9 +448,14 @@ export function FinanceModule() {
         <div className="finance-layout">
           <section className="panel finance-form">
             <h2>Solicitar retiro</h2>
-            <p>
-              Saldo disponible: <b>{money.format(data.wallet.balance)}</b>
-            </p>
+            <div className="space-y-1 mb-3 text-xs">
+              <p>
+                Saldo disponible: <b>{money.format(data.wallet.balance)}</b>
+              </p>
+              <p className="text-slate-500 dark:text-slate-400">
+                Máximo retirable: <b>{money.format(Math.max(0, data.wallet.balance - 0.50))}</b> <small className="text-slate-400">(después de $0.50 de comisión)</small>
+              </p>
+            </div>
             <form onSubmit={withdraw}>
               <label>
                 Cuenta destino
@@ -464,23 +469,27 @@ export function FinanceModule() {
                 </select>
               </label>
               <label>
-                Monto
+                Monto a retirar
                 <input
                   name="amount"
                   type="number"
                   min="1"
-                  max={data.wallet.balance}
+                  max={Math.max(0, data.wallet.balance - 0.50)}
                   step="0.01"
                   required
+                  placeholder="Ej. 50.00"
                 />
               </label>
+              <div className="p-2.5 my-2 bg-slate-100 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 rounded-lg text-[11px] text-slate-600 dark:text-slate-300">
+                ℹ️ Cada retiro aplica una comisión fija de <strong>$0.50</strong>. Se generarán 2 egresos separados en tu billetera: el monto solicitado y los $0.50 de comisión.
+              </div>
               <label>
-                Nota
-                <input name="note" />
+                Nota / Referencia (opcional)
+                <input name="note" placeholder="Ej. Transferencia quincenal..." />
               </label>
               <button
-                className="primary-button"
-                disabled={data.accounts.length === 0 || data.wallet.balance < 1}
+                className="primary-button mt-2"
+                disabled={data.accounts.length === 0 || data.wallet.balance < 1.50}
               >
                 Solicitar transferencia
               </button>

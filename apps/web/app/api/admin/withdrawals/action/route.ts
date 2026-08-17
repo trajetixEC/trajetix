@@ -86,7 +86,10 @@ export async function POST(request: Request) {
           },
         });
       } else {
-        // REJECT action: Restore balance to tenant wallet and release hold
+        // REJECT action: Restore balance (amount + $0.50 fee) to tenant wallet
+        const WITHDRAWAL_FEE_MINOR = 50n;
+        const totalRefundMinor = withdrawal.amountMinor + WITHDRAWAL_FEE_MINOR;
+
         await tx.withdrawal.update({
           where: { id: withdrawal.id },
           data: {
@@ -98,17 +101,30 @@ export async function POST(request: Request) {
         await tx.wallet.update({
           where: { tenantId: withdrawal.tenantId },
           data: {
-            balanceMinor: { increment: withdrawal.amountMinor },
+            balanceMinor: { increment: totalRefundMinor },
           },
         });
 
+        // Release Movement 1: Withdrawal amount refund
         await tx.walletTransaction.create({
           data: {
             tenantId: withdrawal.tenantId,
             type: WalletTransactionType.RELEASE,
             amountMinor: withdrawal.amountMinor,
-            description: `Retiro rechazado por administración - Fondos desbloqueados y devueltos a la billetera`,
+            description: `Retiro rechazado por administración - Monto devuelto a la billetera`,
             referenceType: "WITHDRAWAL",
+            referenceId: withdrawal.id,
+          },
+        });
+
+        // Release Movement 2: Commission fee refund ($0.50)
+        await tx.walletTransaction.create({
+          data: {
+            tenantId: withdrawal.tenantId,
+            type: WalletTransactionType.RELEASE,
+            amountMinor: WITHDRAWAL_FEE_MINOR,
+            description: `Retiro rechazado por administración - Reembolso de comisión de retiro ($0.50)`,
+            referenceType: "WITHDRAWAL_FEE",
             referenceId: withdrawal.id,
           },
         });
