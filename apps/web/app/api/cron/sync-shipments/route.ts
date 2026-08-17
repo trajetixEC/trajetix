@@ -99,6 +99,7 @@ async function handleCronSync(request: Request) {
         trackingNumber: true,
         status: true,
         codMinor: true,
+        quotedMinor: true,
         updatedAt: true,
       },
       take: 150, // Batch limit per cron run for memory & API rate optimization
@@ -180,6 +181,34 @@ async function handleCronSync(request: Request) {
                       balanceAfterMinor: BigInt(balanceAfter),
                       description: `Recaudo COD liquidado por entrega exitosa de guía ${shipment.trackingNumber}`,
                       referenceType: "SHIPMENT",
+                      referenceId: shipment.id,
+                    },
+                  });
+                }
+
+                // Automatic Return Fee Debit (Egreso por Devolución)
+                const returnFeeMinorBigInt = shipment.quotedMinor ?? 0n;
+                const returnFeeAmount = Number(returnFeeMinorBigInt);
+
+                if (newStatus === ShipmentStatus.RETURNED && shipment.status !== ShipmentStatus.RETURNED && returnFeeAmount > 0) {
+                  const currentWallet = await tx.wallet.upsert({
+                    where: { tenantId: shipment.tenantId },
+                    update: { balanceMinor: { decrement: returnFeeMinorBigInt } },
+                    create: { tenantId: shipment.tenantId, balanceMinor: -returnFeeMinorBigInt },
+                  });
+
+                  const balanceAfter = Number(currentWallet.balanceMinor);
+                  const balanceBefore = balanceAfter + returnFeeAmount;
+
+                  await tx.walletTransaction.create({
+                    data: {
+                      tenantId: shipment.tenantId,
+                      type: "DEBIT",
+                      amountMinor: returnFeeMinorBigInt,
+                      balanceBeforeMinor: BigInt(balanceBefore),
+                      balanceAfterMinor: BigInt(balanceAfter),
+                      description: `Flete de retorno por devolución de guía ${shipment.trackingNumber}`,
+                      referenceType: "SHIPMENT_RETURN",
                       referenceId: shipment.id,
                     },
                   });

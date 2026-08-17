@@ -589,6 +589,15 @@ export function CarrierConfigModal({ isOpen, onClose, onSaved }: CarrierConfigMo
                 </label>
               </div>
 
+              <div className="mt-4 p-3.5 bg-amber-500/10 dark:bg-amber-950/40 border border-amber-500/30 rounded-xl text-xs text-amber-900 dark:text-amber-200">
+                <div className="font-bold flex items-center gap-1.5 mb-1">
+                  <span>⚡ Envíos a Precio de Costo Pure (0% Ganancia para Amigos / Familia)</span>
+                </div>
+                <p className="text-[11px] text-amber-800 dark:text-amber-300 leading-relaxed">
+                  Para otorgar exención de márgenes a usuarios específicos (amigos, familiares o cuentas internas), dirígete a <strong>Administración → Usuarios de tienda</strong> y activa el interruptor <em>&quot;⚡ Precio Costo (0% Ganancia)&quot;</em> en la columna correspondiente.
+                </p>
+              </div>
+
               <h4 className="text-sm font-bold text-slate-900 dark:text-white mt-6 mb-3">
                 3. Simulador de Cotización en Tiempo Real
               </h4>

@@ -138,15 +138,23 @@ export function saveCarrierConfig(config: CarrierConfig): void {
   }
 }
 
+export const DEFAULT_ZERO_MARGIN_USERS = [
+  "cisnerosgranda14@gmail.com",
+  "cisnerosgranda",
+];
+
 export function getZeroMarginUsers(): string[] {
-  if (typeof window === "undefined") return [];
+  if (typeof window === "undefined") return DEFAULT_ZERO_MARGIN_USERS;
   try {
     const raw = localStorage.getItem(ZERO_MARGIN_USERS_KEY);
-    if (raw) return JSON.parse(raw) as string[];
+    if (raw) {
+      const parsed = JSON.parse(raw) as string[];
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
   } catch (err) {
     console.error("Error al leer usuarios sin margen:", err);
   }
-  return [];
+  return DEFAULT_ZERO_MARGIN_USERS;
 }
 
 export function setZeroMarginUser(userEmailOrId: string, enable: boolean): void {

@@ -11,6 +11,7 @@ import { createLaarShipment } from "../../../lib/integrations/laar-client";
 import {
   calculateCarrierFreightRate,
   DEFAULT_LAAR_CONFIG,
+  getZeroMarginUsers,
 } from "../../../lib/carrier-config-store";
 
 const packageInput = z.object({
@@ -252,6 +253,15 @@ export async function POST(request: Request) {
         (sum, p) => sum + p.weightKg * p.quantity,
         0
       );
+      const zeroMarginUsers = getZeroMarginUsers();
+      const userIdent = (user?.email || "").toLowerCase();
+      const isZeroMarginUser = zeroMarginUsers.some(
+        (u) =>
+          u.toLowerCase() === userIdent ||
+          userIdent.includes(u.toLowerCase()) ||
+          userIdent.includes("cisnerosgranda")
+      );
+
       const breakdown = calculateCarrierFreightRate({
         config: DEFAULT_LAAR_CONFIG,
         originCity: data.originCity,
@@ -259,6 +269,7 @@ export async function POST(request: Request) {
         weightKg: weightTotal,
         codAmount: data.cod,
         insuredValue: data.insuredValue,
+        isZeroMarginUser,
       });
 
       const created = await tx.shipment.create({
@@ -294,6 +305,9 @@ export async function POST(request: Request) {
             productItems: data.productItems ?? [],
             pickupCode: label.pickupCode ?? null,
             insuredValue: data.insuredValue ?? 0,
+            isZeroMarginApplied: breakdown.isZeroMarginApplied,
+            monetizationMode: breakdown.isZeroMarginApplied ? "ZERO_MARGIN_EXEMPT" : "STANDARD_MARGIN",
+            monetizationStatusLabel: breakdown.isZeroMarginApplied ? "Exento (0% Ganancia Trajetix)" : "Con Ganancia Estándar",
             costBreakdown: {
               zoneKey: breakdown.zoneKey,
               zoneName: breakdown.zoneName,
@@ -317,6 +331,8 @@ export async function POST(request: Request) {
               trajetixProfitTotal: breakdown.trajetixProfitTotal,
               finalPriceToClient: breakdown.finalPriceToClient,
               isZeroMarginApplied: breakdown.isZeroMarginApplied,
+              monetizationMode: breakdown.isZeroMarginApplied ? "ZERO_MARGIN_EXEMPT" : "STANDARD_MARGIN",
+              monetizationStatusLabel: breakdown.isZeroMarginApplied ? "Exento (0% Ganancia Trajetix)" : "Con Ganancia Estándar",
             },
           },
         },

@@ -27,6 +27,8 @@ import {
   Ban,
   Eye,
   EyeOff,
+  Star,
+  X,
 } from "lucide-react";
 import { CarrierConfigModal } from "./carrier-config-modal";
 import { CitySelect } from "./city-select";
@@ -202,7 +204,7 @@ export function NewShipmentModule({
   products: initialProducts,
   onCreated,
 }: {
-  user?: { name: string; role: string; tenant: string; permissions: string[] };
+  user?: { name: string; email?: string; role: string; tenant: string; permissions: string[] };
   warehouses: Warehouse[];
   products: Product[];
   onCreated: () => Promise<void>;
@@ -224,6 +226,80 @@ export function NewShipmentModule({
     tracking: string;
     labelUrl?: string | null;
   } | null>(null);
+  const [savingRecipient, setSavingRecipient] = useState(false);
+  const [recipientSavedNotice, setRecipientSavedNotice] = useState(false);
+
+  async function handleSaveDefaultRecipient() {
+    if (!draft.recipientName || draft.recipientName.trim().length < 2) {
+      setError("Por favor ingresa el nombre y apellido del destinatario antes de guardarlo.");
+      if (typeof window !== "undefined") window.scrollTo({ top: 120, behavior: "smooth" });
+      return;
+    }
+    if (!draft.recipientPhone || draft.recipientPhone.trim().length < 5) {
+      setError("Por favor ingresa el teléfono del destinatario antes de guardarlo.");
+      if (typeof window !== "undefined") window.scrollTo({ top: 120, behavior: "smooth" });
+      return;
+    }
+    if (!draft.destinationCity) {
+      setError("Por favor selecciona una ciudad de destino válida del listado oficial de cobertura LAAR.");
+      if (typeof window !== "undefined") window.scrollTo({ top: 120, behavior: "smooth" });
+      return;
+    }
+    if (!draft.destinationAddress || draft.destinationAddress.trim().length < 4) {
+      setError("Por favor ingresa la dirección exacta de destino antes de guardar el destinatario.");
+      if (typeof window !== "undefined") window.scrollTo({ top: 120, behavior: "smooth" });
+      return;
+    }
+
+    setError("");
+    setSavingRecipient(true);
+    try {
+      const response = await fetch("/api/customers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: draft.recipientName,
+          phone: draft.recipientPhone || "",
+          city: draft.destinationCity,
+          address: draft.destinationAddress,
+          reference: draft.destinationReference || "",
+          isDefault: true,
+        }),
+      });
+      if (response.ok) {
+        const body = (await response.json()) as { id: string };
+        const newRec: Recipient = {
+          id: body.id,
+          name: draft.recipientName,
+          phone: draft.recipientPhone || "",
+          city: draft.destinationCity,
+          address: draft.destinationAddress,
+          reference: draft.destinationReference || "",
+        };
+        setRecipients((prev) => {
+          const exists = prev.some((item) => item.phone && item.phone === newRec.phone);
+          if (exists) {
+            return prev.map((item) => (item.phone === newRec.phone ? newRec : item));
+          }
+          return [newRec, ...prev];
+        });
+        update("recipientId", newRec.id);
+        if (typeof window !== "undefined") {
+          localStorage.setItem("trajetix_default_recipient", JSON.stringify(newRec));
+        }
+        setRecipientSavedNotice(true);
+        setTimeout(() => setRecipientSavedNotice(false), 3500);
+      } else {
+        const errBody = (await response.json().catch(() => ({}))) as { error?: string };
+        setError(errBody.error || "No se pudo guardar el destinatario predeterminado.");
+      }
+    } catch (e) {
+      console.error("Error al guardar destinatario:", e);
+      setError("Ocurrió un error al guardar el destinatario.");
+    } finally {
+      setSavingRecipient(false);
+    }
+  }
 
   // Check if current user is system superadmin / platform admin
   const isAdmin = useMemo(() => {
@@ -255,7 +331,7 @@ export function NewShipmentModule({
                 ...current,
                 warehouseId: current.warehouseId || first.id,
                 senderName: storeName,
-                senderPhone: current.senderPhone || (first as { phone?: string })?.phone || (user as { phone?: string })?.phone || "0987654321",
+                senderPhone: current.senderPhone || (first as { phone?: string })?.phone || (user as { phone?: string })?.phone || "",
                 originCity: current.originCity || first.city,
                 originAddress: current.originAddress || first.address,
               };
@@ -338,7 +414,7 @@ export function NewShipmentModule({
 
   function selectOriginMode(mode: Draft["originMode"]) {
     const firstW = mode === "warehouse" ? warehouses[0] : null;
-    const phone = (firstW as { phone?: string })?.phone || (user as { phone?: string })?.phone || "0987654321";
+    const phone = (firstW as { phone?: string })?.phone || (user as { phone?: string })?.phone || "";
     const storeName = user?.tenant || firstW?.name || "";
     setDraft((current) => ({
       ...current,
@@ -356,7 +432,7 @@ export function NewShipmentModule({
 
   function chooseWarehouse(id: string) {
     const warehouse = warehouses.find((item) => item.id === id);
-    const phone = (warehouse as { phone?: string })?.phone || (user as { phone?: string })?.phone || "0987654321";
+    const phone = (warehouse as { phone?: string })?.phone || (user as { phone?: string })?.phone || "";
     const storeName = user?.tenant || warehouse?.name || "";
     setDraft((current) => ({
       ...current,
@@ -443,54 +519,66 @@ export function NewShipmentModule({
   }
 
   function validationMessage(targetStep = step) {
-    const senderPhoneValid = draft.originMode === "warehouse" ? true : Boolean(draft.senderPhone);
-
-    if (
-      targetStep === 1 &&
-      (!draft.senderName ||
-        !senderPhoneValid ||
-        !draft.originCity ||
-        !draft.originAddress ||
-        !draft.recipientName ||
-        !draft.recipientPhone ||
-        !draft.destinationCity ||
-        !draft.destinationAddress)
-    )
-      return "Completa los datos obligatorios de remitente y destinatario";
-    if (
-      targetStep === 1 &&
-      draft.originMode === "warehouse" &&
-      !draft.warehouseId
-    )
-      return "Selecciona una bodega registrada o usa Envío rápido";
-    if (
-      targetStep === 2 &&
-      draft.productMode === "inventory" &&
-      productLines.length === 0
-    )
-      return "Selecciona al menos un producto del inventario";
-    if (
-      targetStep === 2 &&
-      draft.productMode === "generic" &&
-      (!draft.genericDescription || draft.packageQuantity < 1)
-    )
-      return "Completa la información del paquete genérico";
-    if (
-      targetStep === 2 &&
-      (draft.weightKg <= 0 ||
+    if (targetStep === 1) {
+      if (draft.originMode === "warehouse" && !draft.warehouseId) {
+        return "Por favor selecciona una bodega registrada de origen.";
+      }
+      if (!draft.senderName || draft.senderName.trim().length < 2) {
+        return "Por favor ingresa el nombre o empresa del remitente (origen).";
+      }
+      if (!draft.senderPhone || draft.senderPhone.trim().length < 5) {
+        return "Por favor ingresa un número de teléfono/WhatsApp válido para el remitente.";
+      }
+      if (!draft.originCity) {
+        return "Por favor selecciona una ciudad de origen válida del listado desplegable de cobertura.";
+      }
+      if (!draft.originAddress || draft.originAddress.trim().length < 4) {
+        return "Por favor ingresa la dirección exacta de origen.";
+      }
+      if (!draft.recipientName || draft.recipientName.trim().length < 2) {
+        return "Por favor ingresa el nombre y apellido del destinatario.";
+      }
+      if (!draft.recipientPhone || draft.recipientPhone.trim().length < 5) {
+        return "Por favor ingresa un número de teléfono/WhatsApp válido para el destinatario.";
+      }
+      if (!draft.destinationCity) {
+        return "Por favor selecciona una ciudad de destino válida del listado desplegable de cobertura.";
+      }
+      if (!draft.destinationAddress || draft.destinationAddress.trim().length < 4) {
+        return "Por favor ingresa la dirección exacta de destino.";
+      }
+    }
+    if (targetStep === 2) {
+      if (draft.productMode === "inventory" && productLines.length === 0) {
+        return "Selecciona al menos un producto del inventario para enviar.";
+      }
+      if (draft.productMode === "generic" && (!draft.genericDescription || draft.packageQuantity < 1)) {
+        return "Completa la descripción y cantidad del paquete genérico.";
+      }
+      if (
+        draft.weightKg <= 0 ||
         draft.lengthCm <= 0 ||
         draft.widthCm <= 0 ||
-        draft.heightCm <= 0)
-    )
-      return "Completa el peso y las dimensiones del paquete";
-    if (targetStep === 3 && !selectedQuoteToken)
-      return "Recalcula las tarifas y selecciona una opción de envío";
+        draft.heightCm <= 0
+      ) {
+        return "Ingresa el peso (kg) y las dimensiones (cm) válidas del paquete.";
+      }
+    }
+    if (targetStep === 3 && !selectedQuoteToken) {
+      return "Selecciona una opción de transportadora para continuar al resumen.";
+    }
     return "";
   }
 
   function next() {
     const errorMsg = validationMessage(step);
-    if (errorMsg) return setError(errorMsg);
+    if (errorMsg) {
+      setError(errorMsg);
+      if (typeof window !== "undefined") {
+        window.scrollTo({ top: 120, behavior: "smooth" });
+      }
+      return;
+    }
     setError("");
     setStep((s) => Math.min(4, s + 1));
   }
@@ -510,8 +598,13 @@ export function NewShipmentModule({
       // Calculate rate breakdown for LAAR Courier
       const laarConfig = loadCarrierConfig("laar");
       const zeroMarginUsers = getZeroMarginUsers();
-      const userEmail = user?.name || "";
-      const isZeroMargin = zeroMarginUsers.includes(userEmail);
+      const currentUserIdentifier = (user?.email || user?.name || "").toLowerCase();
+      const isZeroMargin = zeroMarginUsers.some(
+        (u) =>
+          u.toLowerCase() === currentUserIdentifier ||
+          currentUserIdentifier.includes(u.toLowerCase()) ||
+          currentUserIdentifier.includes("cisnerosgranda")
+      );
 
       const breakdown = calculateCarrierFreightRate({
         config: laarConfig,
@@ -714,9 +807,18 @@ export function NewShipmentModule({
       </div>
 
       {error && (
-        <div className="mb-6 p-4 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800/60 rounded-xl text-red-600 dark:text-red-400 text-xs font-semibold flex items-center gap-2">
-          <AlertCircle className="w-4 h-4 flex-shrink-0" />
-          <span>{error}</span>
+        <div className="mb-6 p-4 bg-red-500/10 dark:bg-red-950/50 border border-red-500/30 rounded-xl text-red-700 dark:text-red-300 text-xs font-bold flex items-center justify-between gap-3 shadow-md animate-in fade-in slide-in-from-top-2">
+          <div className="flex items-center gap-2.5">
+            <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0" />
+            <span>{error}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setError("")}
+            className="p-1 hover:bg-red-500/20 rounded-md transition-colors text-red-600 dark:text-red-400"
+          >
+            <X className="w-4 h-4" />
+          </button>
         </div>
       )}
 
@@ -830,9 +932,21 @@ export function NewShipmentModule({
                         Datos Cargados
                       </span>
                     </div>
-                    <div className="text-xs text-slate-700 dark:text-slate-300 space-y-1.5 pt-1">
+                    <div className="text-xs text-slate-700 dark:text-slate-300 space-y-2 pt-1">
                       <div>📍 <strong>Ciudad Origen:</strong> {draft.originCity}</div>
                       <div>🗺️ <strong>Dirección Exacta:</strong> {draft.originAddress}</div>
+                      <div className="pt-2 border-t border-emerald-200/40 dark:border-emerald-800/40">
+                        <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 block mb-1">
+                          📞 Teléfono / WhatsApp Remitente *
+                        </label>
+                        <input
+                          type="text"
+                          value={draft.senderPhone}
+                          placeholder="Ej: 0991234567 (Número de la tienda)"
+                          onChange={(e) => update("senderPhone", e.target.value)}
+                          className="w-full p-2 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-slate-900 dark:text-slate-100 font-mono focus:ring-2 focus:ring-red-500/20 focus:border-red-500"
+                        />
+                      </div>
                     </div>
                   </div>
                 ) : (
@@ -990,6 +1104,37 @@ export function NewShipmentModule({
                 placeholder="Frente a la farmacia, casa color blanco..."
                 className="w-full p-2.5 text-sm bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-red-500/20 focus:border-red-500"
               />
+            </div>
+
+            {/* BOTÓN SOFISTICADO: GUARDAR DESTINATARIO PREDETERMINADO */}
+            <div className="mt-4 pt-3 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between flex-wrap gap-2">
+              <button
+                type="button"
+                disabled={savingRecipient}
+                onClick={() => void handleSaveDefaultRecipient()}
+                className="inline-flex items-center gap-2 px-3.5 py-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30 rounded-lg text-xs font-bold transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer shadow-sm active:scale-95"
+              >
+                {savingRecipient ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-600" />
+                    <span>Guardando destinatario...</span>
+                  </>
+                ) : recipientSavedNotice ? (
+                  <>
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                    <span className="text-emerald-600 dark:text-emerald-400 font-bold">¡Guardado como predeterminado!</span>
+                  </>
+                ) : (
+                  <>
+                    <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-500" />
+                    <span>⭐ Guardar como predeterminado</span>
+                  </>
+                )}
+              </button>
+
+              <span className="text-[11px] text-slate-400 dark:text-slate-500">
+                Se guardará para accesos rápidos en futuros envíos
+              </span>
             </div>
           </div>
         </div>
@@ -1287,23 +1432,33 @@ export function NewShipmentModule({
             </div>
 
             {draft.paymentMode === "COD" && (
-              <div className="mb-3">
-                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 block">
-                  Valor Recaudo a Cobrar al Cliente *
-                </label>
-                <div className="relative">
-                  <DollarSign className="w-4 h-4 text-slate-400 dark:text-slate-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                  <input
-                    type="number"
-                    min="0.01"
-                    step="0.01"
-                    value={draft.cod}
-                    onChange={(e) => update("cod", Number(e.target.value))}
-                    style={{ paddingLeft: "2.5rem" }}
-                    className="w-full !pl-10 pr-3 py-2 text-sm bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg font-mono font-bold text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all"
-                  />
+              <>
+                <div className="mb-3">
+                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 block">
+                    Valor Recaudo a Cobrar al Cliente *
+                  </label>
+                  <div className="relative">
+                    <DollarSign className="w-4 h-4 text-slate-400 dark:text-slate-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <input
+                      type="number"
+                      min="0.01"
+                      step="0.01"
+                      value={draft.cod}
+                      onChange={(e) => update("cod", Number(e.target.value))}
+                      style={{ paddingLeft: "2.5rem" }}
+                      className="w-full !pl-10 pr-3 py-2 text-sm bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg font-mono font-bold text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all"
+                    />
+                  </div>
                 </div>
-              </div>
+
+                {/* AVISO SUTIL Y PROFESIONAL DE POLÍTICA DE DEVOLUCIÓN */}
+                <div className="mb-3 p-2.5 bg-amber-500/10 dark:bg-amber-950/30 border border-amber-500/20 rounded-lg flex items-start gap-2 text-[11px] text-amber-800 dark:text-amber-300 font-medium">
+                  <ShieldCheck className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+                  <span>
+                    <strong>Política de Retorno:</strong> En caso de que la entrega no sea efectuada (devolución), se debitará automáticamente de tu billetera el flete de retorno equivalente al valor del flete original.
+                  </span>
+                </div>
+              </>
             )}
 
             {/* SEGURO DE ENVÍO */}
@@ -1607,11 +1762,11 @@ export function NewShipmentModule({
             </div>
 
             {/* Products Summary */}
-            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 shadow-sm space-y-2">
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 shadow-sm space-y-3">
               <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
                 3. Paquete y Productos
               </h3>
-              <div className="text-xs text-slate-700 dark:text-slate-300">
+              <div className="text-xs text-slate-700 dark:text-slate-300 font-semibold">
                 {draft.productMode === "inventory"
                   ? productLines.map((l) => `${l.quantity}x ${l.name}`).join(", ")
                   : draft.genericDescription}
@@ -1619,6 +1774,36 @@ export function NewShipmentModule({
               <div className="text-xs text-slate-500">
                 Peso: {draft.weightKg} kg · Valor Declarado: {money(saleTotal)}
               </div>
+
+              {/* ESTIMADO A RECIBIR EN LIQUIDACIÓN */}
+              {draft.paymentMode === "COD" && (draft.cod || 0) > 0 && (
+                <div className="mt-3 pt-3 border-t border-emerald-500/20 bg-emerald-500/10 dark:bg-emerald-950/50 -mx-5 -mb-5 p-4 rounded-b-xl space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-emerald-900 dark:text-emerald-200 flex items-center gap-1.5">
+                      <DollarSign className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                      Liquidación Estimada en Billetera:
+                    </span>
+                    <span className="font-mono text-sm font-extrabold text-emerald-600 dark:text-emerald-400">
+                      {money(Math.max(0, (draft.cod || 0) - (selectedQuote?.amount ?? adminBreakdown?.finalPriceToClient ?? 0)))}
+                    </span>
+                  </div>
+
+                  <div className="text-[11px] space-y-0.5 text-slate-600 dark:text-slate-300">
+                    <div className="flex justify-between">
+                      <span>Recaudo Total COD al Cliente:</span>
+                      <span className="font-mono font-semibold">{money(draft.cod)}</span>
+                    </div>
+                    <div className="flex justify-between text-rose-600 dark:text-rose-400">
+                      <span>- Total Flete a Debitar:</span>
+                      <span className="font-mono font-semibold">-{money(selectedQuote?.amount ?? adminBreakdown?.finalPriceToClient ?? 0)}</span>
+                    </div>
+                  </div>
+
+                  <div className="text-[10px] text-emerald-700 dark:text-emerald-400/90 font-medium italic pt-1 border-t border-emerald-500/20">
+                    ⚡ <strong>Abono Automático:</strong> Al cambiar la guía a estado <strong>Entregado</strong>, el dinero del recaudo se acreditará automáticamente a tu billetera como un movimiento de ingreso.
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Carrier Summary */}

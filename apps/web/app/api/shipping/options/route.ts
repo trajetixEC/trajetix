@@ -94,7 +94,7 @@ export async function GET() {
       recipients: [...recipientMap.values()],
       carriers,
       warehouses: warehouses.map((warehouse) => {
-        const addr = (warehouse.address as { city?: string; line1?: string; latitude?: number; longitude?: number; lat?: number; lng?: number }) || {};
+        const addr = (warehouse.address as { city?: string; line1?: string; phone?: string; latitude?: number; longitude?: number; lat?: number; lng?: number }) || {};
         const rawLat = addr.latitude ?? addr.lat;
         const rawLng = addr.longitude ?? addr.lng;
         const lat = typeof rawLat === "number" && !isNaN(rawLat) && rawLat !== 0 ? rawLat : null;
@@ -103,6 +103,7 @@ export async function GET() {
           id: warehouse.id,
           code: warehouse.code,
           name: warehouse.name,
+          phone: addr.phone ?? "",
           city: addr.city ?? "",
           address: addr.line1 ?? "",
           latitude: lat,

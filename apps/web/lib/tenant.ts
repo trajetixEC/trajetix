@@ -31,12 +31,23 @@ export async function requirePlatformAdmin() {
 }
 
 export async function requireTenantOwner() {
-  const context = await requireTenant("members:manage");
+  const session = await auth();
+  if (!session?.user?.id || !session.user.tenantId) {
+    throw new TenantAccessError(401, "No autenticado");
+  }
   const { getPrisma } = await import("./prisma");
+  const platformUser = await getPrisma().user.findUnique({
+    where: { id: session.user.id },
+    select: { platformRole: true },
+  });
+  const isSuperAdmin = platformUser?.platformRole === "SUPER_ADMIN";
+  if (isSuperAdmin) {
+    return { tenantId: session.user.tenantId, userId: session.user.id, isSuperAdmin: true };
+  }
   const owner = await getPrisma().membership.findFirst({
     where: {
-      tenantId: context.tenantId,
-      userId: context.userId,
+      tenantId: session.user.tenantId,
+      userId: session.user.id,
       status: "ACTIVE",
       roles: { some: { role: { systemKey: "owner" } } },
     },
@@ -45,9 +56,9 @@ export async function requireTenantOwner() {
   if (!owner)
     throw new TenantAccessError(
       403,
-      "Sólo el propietario puede administrar usuarios",
+      "Sólo el SuperAdmin de la plataforma puede administrar usuarios",
     );
-  return context;
+  return { tenantId: session.user.tenantId, userId: session.user.id, isSuperAdmin: false };
 }
 
 async function getPlatformUser(userId: string) {

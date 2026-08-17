@@ -135,24 +135,16 @@ const menu: {
     superAdminOnly: true,
   },
   { label: "Tracking", icon: "⌖", permissions: ["shipments:read"], group: "PLATAFORMA" },
-  { label: "Clientes", icon: "◎", permissions: ["customers:read"], group: "CLIENTES" },
   { label: "Bodegas", icon: "▤", permissions: ["warehouses:read"], group: "STOCK & BODEGAS" },
   { label: "Inventario", icon: "◇", permissions: ["inventory:read"], group: "STOCK & BODEGAS" },
-  {
-    label: "Fulfillment",
-    icon: "◫",
-    permissions: ["picking:read", "packing:read"],
-    group: "STOCK & BODEGAS",
-  },
   { label: "Finanzas", icon: "$", permissions: ["finance:read"], group: "FINANZAS" },
   { label: "Referidos", icon: "↗", permissions: ["referrals:read"], group: "CRECIMIENTO" },
-  { label: "Configuración", icon: "⚙", permissions: ["settings:read"], group: "ADMINISTRACIÓN" },
   {
     label: "Usuarios de tienda",
     icon: "♙",
     permissions: ["members:manage"],
     group: "ADMINISTRACIÓN",
-    ownerOnly: true,
+    superAdminOnly: true,
   },
   {
     label: "Transportadoras",
@@ -220,7 +212,7 @@ function applyAppearance(value: "LIGHT" | "DARK" | "SYSTEM") {
 export function DashboardApp({
   user,
 }: {
-  user: { name: string; role: string; tenant: string; permissions: string[] };
+  user: { name: string; email?: string; role: string; tenant: string; permissions: string[] };
 }) {
   const owner = isOwnerRole(user.role);
   const superAdmin = isSuperAdminRole(user.role);

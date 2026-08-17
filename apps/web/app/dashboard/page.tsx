@@ -23,6 +23,7 @@ export default async function DashboardPage() {
     <DashboardApp
       user={{
         name: session.user.name ?? "Usuario",
+        email: session.user.email ?? "",
         role: roleLabel,
         tenant: session.user.tenantName ?? "Mi organización",
         permissions: session.user.permissions,

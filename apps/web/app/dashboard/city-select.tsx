@@ -137,10 +137,10 @@ export function CitySelect({
         // Auto-select top suggestion if user typed a partial valid name
         handleSelect(suggestions[0]);
       } else {
-        // Revert to last valid selected city if raw input is not in catalog
-        setQuery(selectedCity);
-        const lastValidLoc = locations.find((l) => l.name === selectedCity);
-        onChange(selectedCity, lastValidLoc);
+        // Clear raw invalid input if not in coverage catalog
+        setQuery("");
+        setSelectedCity("");
+        onChange("", undefined);
       }
     }
   };
@@ -177,6 +177,8 @@ export function CitySelect({
     }
   };
 
+  const isValidCitySelected = Boolean(selectedCity && locations.some((l) => l.name === selectedCity));
+
   return (
     <div className="relative w-full mb-3" ref={containerRef}>
       <label className="text-xs font-semibold text-slate-700 dark:text-slate-200 mb-1.5 flex items-center gap-1.5">
@@ -185,7 +187,7 @@ export function CitySelect({
       </label>
 
       <div className="relative flex items-center w-full">
-        <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 dark:text-slate-500 pointer-events-none" />
+        <MapPin className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none ${isValidCitySelected ? "text-emerald-500" : "text-slate-400 dark:text-slate-500"}`} />
         
         <input
           ref={inputRef}
@@ -195,15 +197,33 @@ export function CitySelect({
           onFocus={() => setIsOpen(true)}
           onBlur={handleBlur}
           onChange={(e) => {
-            setQuery(e.target.value);
+            const val = e.target.value;
+            setQuery(val);
             setIsOpen(true);
             setSelectedIndex(0);
-            onChange(e.target.value, undefined);
+
+            const clean = val.trim().toLowerCase();
+            const exact = locations.find(
+              (loc) => loc.name.toLowerCase() === clean || loc.displayLabel.toLowerCase() === clean
+            );
+            if (exact) {
+              setSelectedCity(exact.name);
+              onChange(exact.name, exact);
+            } else if (!val) {
+              setSelectedCity("");
+              onChange("", undefined);
+            }
           }}
           onKeyDown={handleKeyDown}
           autoComplete="off"
           style={{ paddingLeft: "2.75rem" }}
-          className="w-full pl-11 pr-9 py-2 text-sm bg-slate-50 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-lg text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all duration-150 shadow-sm"
+          className={`w-full pl-11 pr-9 py-2 text-sm bg-slate-50 dark:bg-slate-900/80 border rounded-lg text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 transition-all duration-150 shadow-sm ${
+            isValidCitySelected
+              ? "border-emerald-500/60 focus:ring-emerald-500/20 focus:border-emerald-500"
+              : query && !isOpen
+              ? "border-amber-500/60 focus:ring-amber-500/20 focus:border-amber-500"
+              : "border-slate-200 dark:border-slate-800 focus:ring-red-500/20 focus:border-red-500"
+          }`}
         />
 
         {loading && (
@@ -221,6 +241,18 @@ export function CitySelect({
           </button>
         )}
       </div>
+
+      {/* Verified / Warning Indicators */}
+      {isValidCitySelected ? (
+        <div className="mt-1 flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold">
+          <Check className="w-3.5 h-3.5" />
+          <span>Ciudad de cobertura oficial seleccionada ({selectedCity})</span>
+        </div>
+      ) : query.trim().length >= 2 && !isOpen ? (
+        <div className="mt-1 flex items-center gap-1 text-[11px] text-amber-600 dark:text-amber-400 font-medium">
+          <span>⚠️ Selecciona una opción del listado para validar la cobertura.</span>
+        </div>
+      ) : null}
 
       {/* Dropdown Suggestions List (shadcn style) */}
       {isOpen && (

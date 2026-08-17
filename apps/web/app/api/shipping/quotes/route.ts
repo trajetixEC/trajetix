@@ -11,6 +11,7 @@ import {
 import {
   calculateCarrierFreightRate,
   DEFAULT_LAAR_CONFIG,
+  getZeroMarginUsers,
 } from "../../../../lib/carrier-config-store";
 
 const address = z.object({
@@ -44,7 +45,11 @@ const input = z.object({
 
 export async function POST(request: Request) {
   try {
-    const { tenantId } = await requireTenant("shipments:create");
+    const { tenantId, userId } = await requireTenant("shipments:create");
+    const user = await getPrisma().user.findUnique({
+      where: { id: userId },
+      select: { email: true },
+    });
     const parsed = input.safeParse(await request.json());
     if (!parsed.success) {
       return Response.json(
@@ -105,7 +110,15 @@ export async function POST(request: Request) {
             }),
           }));
         } catch {
-          // Fallback to internal freight rate calculation engine for LAAR Courier
+          const zeroMarginUsers = getZeroMarginUsers();
+          const userIdent = (user?.email || "").toLowerCase();
+          const isZeroMarginUser = zeroMarginUsers.some(
+            (u) =>
+              u.toLowerCase() === userIdent ||
+              userIdent.includes(u.toLowerCase()) ||
+              userIdent.includes("cisnerosgranda")
+          );
+
           const weightTotal = parsed.data.parcels.reduce(
             (sum, p) => sum + p.weightKg * p.quantity,
             0
@@ -117,6 +130,7 @@ export async function POST(request: Request) {
             weightKg: weightTotal,
             codAmount: parsed.data.codMinor / 100,
             insuredValue: parsed.data.insuredValue || (parsed.data.insuredValueMinor ? parsed.data.insuredValueMinor / 100 : 0),
+            isZeroMarginUser,
           });
 
           const amountMinor = Math.round(breakdown.finalPriceToClient * 100);

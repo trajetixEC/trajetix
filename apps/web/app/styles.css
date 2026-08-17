@@ -689,6 +689,109 @@ html[data-theme="light"] .modal-card input:focus {
   box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15);
 }
 
+/* LIGHT MODE OVERRIDES FOR ADMIN & OPERATIONAL MODULES */
+html[data-theme="light"] .module-notice {
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  color: #065f46;
+  font-weight: 600;
+}
+
+html[data-theme="light"] .module-notice button {
+  color: #047857;
+}
+
+html[data-theme="light"] .users-search input,
+html[data-theme="light"] .users-toolbar select,
+html[data-theme="light"] .role-select,
+html[data-theme="light"] .operation-card input,
+html[data-theme="light"] .operation-card select {
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  color: #0f172a;
+}
+
+html[data-theme="light"] .users-search input:focus,
+html[data-theme="light"] .users-toolbar select:focus,
+html[data-theme="light"] .role-select:focus {
+  border-color: #ef4444;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15);
+}
+
+html[data-theme="light"] .users-search span {
+  color: #64748b;
+}
+
+html[data-theme="light"] .icon-action,
+html[data-theme="light"] .user-actions button {
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  color: #334155;
+}
+
+html[data-theme="light"] .icon-action:hover,
+html[data-theme="light"] .user-actions button:hover {
+  background: #e2e8f0;
+  color: #0f172a;
+  border-color: #94a3b8;
+}
+
+html[data-theme="light"] .user-actions .danger-action {
+  color: #dc2626;
+}
+
+html[data-theme="light"] .user-actions .danger-action:hover {
+  background: #fef2f2;
+  border-color: #fca5a5;
+  color: #991b1b;
+}
+
+html[data-theme="light"] .users-count {
+  color: #64748b;
+}
+
+html[data-theme="light"] .users-table th {
+  color: #475569;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+html[data-theme="light"] .users-table td {
+  color: #1e293b;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+html[data-theme="light"] .users-table td:nth-child(2) {
+  color: #64748b;
+}
+
+html[data-theme="light"] .member-status.active {
+  background: #dcfce7;
+  color: #15803d;
+  border: 1px solid #bbf7d0;
+}
+
+html[data-theme="light"] .member-status.suspended {
+  background: #ffe4e6;
+  color: #be123c;
+  border: 1px solid #fecdd3;
+}
+
+html[data-theme="light"] .member-status.invited {
+  background: #fef3c7;
+  color: #b45309;
+  border: 1px solid #fde68a;
+}
+
+html[data-theme="light"] .zero-margin-toggle {
+  color: #334155;
+}
+
+html[data-theme="light"] .integration-list > span {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  color: #0f172a;
+}
+
 html[data-theme="light"] .auth-page,
 html[data-theme="light"] .simple-auth {
   background: #f8fafc;

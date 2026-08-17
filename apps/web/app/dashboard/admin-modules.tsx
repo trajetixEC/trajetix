@@ -847,6 +847,7 @@ type Member = {
     name?: string | null;
     email: string;
     phone?: string | null;
+    platformRole?: string | null;
     lastLoginAt?: string | null;
   };
   roles: Array<{ id: string; name: string; systemKey?: string | null }>;
@@ -920,6 +921,7 @@ export function StoreUsersModule() {
     modules: {},
   });
   const [message, setMessage] = useState("");
+  const [modalError, setModalError] = useState("");
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("ALL");
   const [modal, setModal] = useState<UserModal>(null);
@@ -949,6 +951,7 @@ export function StoreUsersModule() {
 
   async function request(method: string, body?: object, suffix = "") {
     setSaving(true);
+    setModalError("");
     const init: RequestInit = { method };
     if (body) {
       init.headers = { "Content-Type": "application/json" };
@@ -959,16 +962,18 @@ export function StoreUsersModule() {
       error?: string;
     };
     setSaving(false);
-    setMessage(
-      response.ok
-        ? "Cambios guardados correctamente"
-        : (result.error ?? "No se pudo completar la acción"),
-    );
     if (response.ok) {
+      setMessage("Cambios guardados correctamente");
+      setModalError("");
       setModal(null);
       await load();
+      return true;
+    } else {
+      const err = result.error ?? "No se pudo completar la acción";
+      setModalError(err);
+      setMessage(err);
+      return false;
     }
-    return response.ok;
   }
   async function changeRole(membershipId: string, roleId: string) {
     await request("PATCH", { action: "role", membershipId, roleId });
@@ -1067,7 +1072,6 @@ export function StoreUsersModule() {
                 <th>Estado</th>
                 <th>Rol</th>
                 <th>Envíos Sin Ganancia</th>
-                <th>Permisos</th>
                 <th>Último acceso</th>
                 <th>Acciones</th>
               </tr>
@@ -1075,6 +1079,7 @@ export function StoreUsersModule() {
             <tbody>
               {filtered.map((member) => {
                 const isZeroMargin = zeroMarginUsers.includes(member.user.email);
+                const isSuperAdmin = member.user.platformRole === "SUPER_ADMIN";
                 return (
                   <tr key={member.id}>
                     <td>
@@ -1094,40 +1099,37 @@ export function StoreUsersModule() {
                       </span>
                     </td>
                     <td>
-                      <select
-                        className="role-select"
-                        value={member.roles[0]?.id ?? ""}
-                        onChange={(event) =>
-                          void changeRole(member.id, event.target.value)
-                        }
-                      >
-                        {data.roles.map((role) => (
-                          <option key={role.id} value={role.id}>
-                            {role.name}
-                          </option>
-                        ))}
-                      </select>
+                      {isSuperAdmin ? (
+                        <span className="px-2.5 py-1 bg-purple-100 dark:bg-purple-950/80 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 rounded-md text-xs font-bold font-mono inline-flex items-center gap-1">
+                          👑 SuperAdmin
+                        </span>
+                      ) : (
+                        <select
+                          className="role-select"
+                          value={member.roles[0]?.id ?? ""}
+                          onChange={(event) =>
+                            void changeRole(member.id, event.target.value)
+                          }
+                        >
+                          {data.roles.map((role) => (
+                            <option key={role.id} value={role.id}>
+                              {role.name}
+                            </option>
+                          ))}
+                        </select>
+                      )}
                     </td>
                     <td>
-                      <label className="zero-margin-toggle" title="Permitir generar envíos a precio de costo puro (0% ganancia Trajetix) para familiares, amigos o cuentas secundarias">
+                      <label className="zero-margin-toggle" title="Al activar, a este usuario NO se le cobrarán márgenes de ganancia (ideal para familiares o amigos).">
                         <input
                           type="checkbox"
                           checked={isZeroMargin}
                           onChange={(e) => toggleZeroMargin(member.user.email, e.target.checked)}
                         />
-                        <span>{isZeroMargin ? "⚡ Precio Costo (0% Ganancia)" : "Estándar"}</span>
+                        <span className={isZeroMargin ? "font-bold text-amber-600 dark:text-amber-400" : "text-slate-500"}>
+                          {isZeroMargin ? "⚡ Exento (0% Ganancia)" : "Con Ganancia Estándar"}
+                        </span>
                       </label>
-                    </td>
-                    <td>
-                      <button
-                        className="permission-count"
-                        onClick={() => setModal({ kind: "permissions", member })}
-                      >
-                        ♢ {member.permissions.length}
-                        {member.customPermissions
-                          ? " personalizados"
-                          : " por rol"}
-                      </button>
                     </td>
                     <td>
                       {member.user.lastLoginAt
@@ -1191,7 +1193,11 @@ export function StoreUsersModule() {
           title="Nuevo usuario"
           roles={data.roles}
           saving={saving}
-          onClose={() => setModal(null)}
+          error={modalError}
+          onClose={() => {
+            setModalError("");
+            setModal(null);
+          }}
           onSubmit={(event) => {
             event.preventDefault();
             const form = new FormData(event.currentTarget);
@@ -1211,7 +1217,11 @@ export function StoreUsersModule() {
           member={modal.member}
           roles={data.roles}
           saving={saving}
-          onClose={() => setModal(null)}
+          error={modalError}
+          onClose={() => {
+            setModalError("");
+            setModal(null);
+          }}
           onSubmit={(event) => {
             event.preventDefault();
             const form = new FormData(event.currentTarget);
@@ -1235,7 +1245,10 @@ export function StoreUsersModule() {
               ?.permissions ?? []
           }
           saving={saving}
-          onClose={() => setModal(null)}
+          onClose={() => {
+            setModalError("");
+            setModal(null);
+          }}
           onSave={(permissions) =>
             void request("PATCH", {
               action: "permissions",
@@ -1254,6 +1267,7 @@ function UserEditor({
   member,
   roles,
   saving,
+  error,
   onClose,
   onSubmit,
 }: {
@@ -1261,6 +1275,7 @@ function UserEditor({
   member?: Member;
   roles: MembersData["roles"];
   saving: boolean;
+  error?: string;
   onClose: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
@@ -1282,6 +1297,13 @@ function UserEditor({
             ? "Actualiza los datos. Deja la contraseña vacía para conservarla."
             : "Crea credenciales y asigna el rol inicial de este usuario."}
         </p>
+
+        {error && (
+          <div className="mb-4 p-3 bg-red-500/10 dark:bg-red-950/40 border border-red-500/30 rounded-xl text-red-600 dark:text-red-400 text-xs font-bold flex items-center gap-2 shadow-sm">
+            <span>⚠️ {error}</span>
+          </div>
+        )}
+
         <form onSubmit={onSubmit}>
           <label>
             Nombre completo
@@ -1348,8 +1370,17 @@ function UserEditor({
             >
               Cancelar
             </button>
-            <button className="primary-button" disabled={saving}>
-              {saving ? "Guardando…" : member ? "Actualizar" : "Crear usuario"}
+            <button className="primary-button inline-flex items-center justify-center gap-2" disabled={saving}>
+              {saving ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin text-white" />
+                  <span>Guardando…</span>
+                </>
+              ) : member ? (
+                "Actualizar"
+              ) : (
+                "Crear usuario"
+              )}
             </button>
           </div>
         </form>

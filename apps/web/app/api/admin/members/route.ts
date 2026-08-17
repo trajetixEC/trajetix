@@ -52,11 +52,11 @@ async function syncTeamRoles(tenantId: string) {
 
 export async function GET() {
   try {
-    const { tenantId } = await requireTenantOwner();
+    const { tenantId, isSuperAdmin } = await requireTenantOwner();
     const prisma = getPrisma();
     const roles = await syncTeamRoles(tenantId);
     const members = await prisma.membership.findMany({
-      where: { tenantId, roles: { none: { role: { systemKey: "owner" } } } },
+      where: isSuperAdmin ? {} : { tenantId },
       include: {
         user: {
           select: {
@@ -65,12 +65,13 @@ export async function GET() {
             email: true,
             image: true,
             phone: true,
+            platformRole: true,
             lastLoginAt: true,
           },
         },
         roles: { include: { role: true } },
       },
-      orderBy: { createdAt: "asc" },
+      orderBy: { createdAt: "desc" },
     });
 
     return Response.json({
@@ -224,11 +225,6 @@ export async function PATCH(request: Request) {
     const membership = await getMembership(tenantId, parsed.data.membershipId);
     if (!membership)
       return Response.json({ error: "Usuario no encontrado" }, { status: 404 });
-    if (isOwner(membership))
-      return Response.json(
-        { error: "El propietario no se administra desde Usuarios de tienda" },
-        { status: 403 },
-      );
 
     if (parsed.data.action === "role") {
       const role = await prisma.role.findFirst({
