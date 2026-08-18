@@ -287,12 +287,18 @@ export async function POST(request: Request) {
           line1: data.destinationAddress,
           ...(data.destinationReference ? { reference: data.destinationReference } : {}),
         },
-        parcels: data.packages.map((item) => ({
-          description: item.description,
-          quantity: item.quantity,
-          weightKg: item.weightKg,
-          declaredValueMinor: Math.round(item.declaredValue * 100),
-        })),
+        parcels: data.packages.map((item, index) => {
+          const declared =
+            typeof data.insuredValue === "number" && data.insuredValue > 0
+              ? (index === 0 ? data.insuredValue : 0)
+              : item.declaredValue;
+          return {
+            description: item.description,
+            quantity: item.quantity,
+            weightKg: item.weightKg,
+            declaredValueMinor: Math.round(declared * 100),
+          };
+        }),
         codMinor: Math.round(data.cod * 100),
       });
     } catch (error) {

@@ -6,7 +6,48 @@
  *   Base URL: https://api.laarcourier.com:9747
  */
 
+import { getPrisma } from "../prisma";
+
 let cachedToken: { token: string; expiresAt: number } | null = null;
+
+async function resolveLaarCityCode(cityName: string): Promise<string> {
+  if (!cityName) return "201001001001";
+
+  const cleanName = cityName.trim();
+  try {
+    const loc = await getPrisma().canonicalLocation.findFirst({
+      where: {
+        active: true,
+        OR: [
+          { name: { equals: cleanName, mode: "insensitive" } },
+          { laarCityName: { equals: cleanName, mode: "insensitive" } },
+          { name: { contains: cleanName, mode: "insensitive" } },
+        ],
+      },
+      select: { laarCode: true },
+    });
+
+    if (loc?.laarCode) {
+      return String(loc.laarCode);
+    }
+  } catch (err) {
+    console.error("Error resolviendo código de ciudad LAAR para:", cityName, err);
+  }
+
+  // Fallback map for common Ecuadorian cities if DB lookup fails
+  const lower = cleanName.toLowerCase();
+  if (lower.includes("guayaquil")) return "201001002001";
+  if (lower.includes("salinas")) return "201001002004";
+  if (lower.includes("cuenca")) return "201001001001";
+  if (lower.includes("manta")) return "20100101901";
+  if (lower.includes("ambato")) return "20100101801";
+  if (lower.includes("machala")) return "20100100701";
+  if (lower.includes("portoviejo")) return "20100101901";
+  if (lower.includes("loja")) return "20100101101";
+  if (lower.includes("ibarra")) return "20100101001";
+
+  return "201001001001";
+}
 
 export async function getLaarAuthToken(): Promise<string> {
   if (cachedToken && cachedToken.expiresAt > Date.now() + 60_000) {
@@ -94,10 +135,8 @@ export async function createLaarShipment(
   const codAmount = input.codMinor / 100;
   const isCod = codAmount > 0;
 
-  const originCityCode =
-    LAAR_CITY_CODES[input.origin.city.toLowerCase()] || "201001001001";
-  const destCityCode =
-    LAAR_CITY_CODES[input.destination.city.toLowerCase()] || "201001001001";
+  const originCityCode = await resolveLaarCityCode(input.origin.city);
+  const destCityCode = await resolveLaarCityCode(input.destination.city);
 
   const uniqueGuiaRef = input.reference || `TRJ${Date.now()}`;
 
@@ -149,8 +188,8 @@ export async function createLaarShipment(
       tamanio: "",
     },
     extras: {
-      campo1: "",
-      campo2: "",
+      campo1: input.origin.name || "",
+      campo2: "Trajetix ERP",
       campo3: "",
     },
   };

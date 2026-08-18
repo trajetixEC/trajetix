@@ -480,6 +480,11 @@ export function NewShipmentModule({
   }
 
   function parcels() {
+    const declaredVal =
+      typeof draft.insuredValue === "number" && draft.insuredValue > 0
+        ? draft.insuredValue
+        : saleTotal;
+
     return [
       {
         description:
@@ -493,7 +498,7 @@ export function NewShipmentModule({
         lengthCm: draft.lengthCm,
         widthCm: draft.widthCm,
         heightCm: draft.heightCm,
-        declaredValueMinor: Math.round(saleTotal * 100),
+        declaredValueMinor: Math.round(declaredVal * 100),
       },
     ];
   }
