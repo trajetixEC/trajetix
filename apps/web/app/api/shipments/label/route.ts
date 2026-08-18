@@ -9,7 +9,7 @@ function patchLaarPdfSenderName(pdfBuffer: Buffer, storeName: string): Buffer {
     const cleanStoreName = storeName.trim();
     if (!cleanStoreName) return pdfBuffer;
 
-    let pdfStr = pdfBuffer.toString("latin1");
+    const pdfStr = pdfBuffer.toString("latin1");
     const streamRegex = /stream[\r\n]+([\s\S]*?)[\r\n]+endstream/g;
 
     const patchedStr = pdfStr.replace(streamRegex, (match, streamData) => {

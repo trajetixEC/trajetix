@@ -195,7 +195,7 @@ function applyAppearance(value: "LIGHT" | "DARK" | "SYSTEM") {
   if (typeof window === "undefined") return;
   try {
     localStorage.setItem("trajetix-appearance", value);
-  } catch (e) {}
+  } catch {}
 
   const systemLight = window.matchMedia("(prefers-color-scheme: light)").matches;
   const isLight = value === "LIGHT" || (value === "SYSTEM" && systemLight);

@@ -2228,7 +2228,6 @@ export function MyShipmentsModule({
               {filtered.map((item, index) => {
                 const generated = hasGeneratedGuide(item);
                 const weight = shipmentWeight(item);
-                const canCancel = ["DRAFT", "QUOTED", "LABEL_CREATED", "PICKUP_SCHEDULED"].includes(item.status);
                 const openUp = index >= Math.max(1, filtered.length - 2);
                 return (
                   <Fragment key={item.id}>

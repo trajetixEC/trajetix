@@ -115,14 +115,7 @@ export type LaarShipmentResult = {
   raw?: unknown;
 };
 
-// Default city code mapping for LAAR Courier
-const LAAR_CITY_CODES: Record<string, string> = {
-  quito: "201001001001",
-  guayaquil: "20100101901",
-  ambato: "20100101901",
-  cuenca: "201001001001",
-  manta: "20100101901",
-};
+
 
 export async function createLaarShipment(
   input: LaarShipmentInput
