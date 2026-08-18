@@ -213,6 +213,34 @@ async function handleCronSync(request: Request) {
                     },
                   });
                 }
+
+                // Automatic Cancellation Refund (Reembolso si la guía se anula antes de recolectar)
+                const refundAmountBigInt = shipment.quotedMinor ?? 0n;
+                const refundAmount = Number(refundAmountBigInt);
+
+                if (newStatus === ShipmentStatus.CANCELLED && shipment.status !== ShipmentStatus.CANCELLED && refundAmount > 0) {
+                  const currentWallet = await tx.wallet.upsert({
+                    where: { tenantId: shipment.tenantId },
+                    update: { balanceMinor: { increment: refundAmountBigInt } },
+                    create: { tenantId: shipment.tenantId, balanceMinor: refundAmountBigInt },
+                  });
+
+                  const balanceAfter = Number(currentWallet.balanceMinor);
+                  const balanceBefore = balanceAfter - refundAmount;
+
+                  await tx.walletTransaction.create({
+                    data: {
+                      tenantId: shipment.tenantId,
+                      type: "RELEASE",
+                      amountMinor: refundAmountBigInt,
+                      balanceBeforeMinor: BigInt(balanceBefore),
+                      balanceAfterMinor: BigInt(balanceAfter),
+                      description: `Reembolso por anulación de guía ${shipment.trackingNumber}`,
+                      referenceType: "SHIPMENT",
+                      referenceId: shipment.id,
+                    },
+                  });
+                }
               });
 
               updatedCount++;

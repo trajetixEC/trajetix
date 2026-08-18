@@ -81,7 +81,7 @@ export async function POST(request: Request) {
       }
     }
 
-    // 5. Update shipment status in database
+    // 5. Update shipment status in database and refund freight cost to wallet
     await getPrisma().$transaction(async (tx) => {
       await tx.shipment.update({
         where: { id: shipment.id },
@@ -94,10 +94,36 @@ export async function POST(request: Request) {
           shipmentId: shipment.id,
           carrierCode: shipment.carrier || "LAAR",
           status: ShipmentStatus.CANCELLED,
-          description: "Guía anulada por el SuperAdmin en el panel.",
+          description: "Guía anulada antes de recolección.",
           occurredAt: new Date(),
         },
       });
+
+      // Reembolso automático del costo del flete a la billetera (no salió de bodega)
+      const refundAmount = shipment.quotedMinor ?? 0n;
+      if (refundAmount > 0n) {
+        const wallet = await tx.wallet.upsert({
+          where: { tenantId: shipment.tenantId },
+          update: { balanceMinor: { increment: refundAmount } },
+          create: { tenantId: shipment.tenantId, balanceMinor: refundAmount },
+        });
+
+        const balanceAfter = wallet.balanceMinor;
+        const balanceBefore = balanceAfter - refundAmount;
+
+        await tx.walletTransaction.create({
+          data: {
+            tenantId: shipment.tenantId,
+            type: "RELEASE",
+            amountMinor: refundAmount,
+            balanceBeforeMinor: balanceBefore,
+            balanceAfterMinor: balanceAfter,
+            description: `Reembolso por anulación de guía ${shipment.trackingNumber || shipment.id} (No recolectada)`,
+            referenceType: "SHIPMENT",
+            referenceId: shipment.id,
+          },
+        });
+      }
     });
 
     return Response.json({

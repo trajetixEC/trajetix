@@ -107,7 +107,7 @@ export function CitySelect({
     .slice(0, 15);
 
   const handleSelect = (loc: LocationOption) => {
-    setQuery(loc.name);
+    setQuery(loc.displayLabel);
     setSelectedCity(loc.name);
     setIsOpen(false);
     onChange(loc.name, loc);
@@ -124,24 +124,31 @@ export function CitySelect({
         return;
       }
 
-      // Check if typed text matches an official location in catalog
-      const exactMatch = locations.find(
-        (loc) =>
-          loc.name.toLowerCase() === clean ||
-          loc.displayLabel.toLowerCase() === clean
+      // Check if current query matches an official displayLabel exactly
+      const exactDisplayMatch = locations.find(
+        (loc) => loc.displayLabel.toLowerCase() === clean
       );
 
-      if (exactMatch) {
-        handleSelect(exactMatch);
-      } else if (suggestions.length > 0 && suggestions[0] && clean.length >= 2) {
-        // Auto-select top suggestion if user typed a partial valid name
-        handleSelect(suggestions[0]);
-      } else {
-        // Clear raw invalid input if not in coverage catalog
-        setQuery("");
-        setSelectedCity("");
-        onChange("", undefined);
+      if (exactDisplayMatch) {
+        handleSelect(exactDisplayMatch);
+        return;
       }
+
+      // Check if current query matches an official loc.name exactly (if unique)
+      const exactNameMatches = locations.filter(
+        (loc) => loc.name.toLowerCase() === clean
+      );
+
+      if (exactNameMatches.length === 1 && exactNameMatches[0]) {
+        handleSelect(exactNameMatches[0]);
+        return;
+      }
+
+      // If user typed ambiguous raw text (e.g. "salinas") or didn't select from dropdown,
+      // reset raw input and force explicit selection from the dropdown list
+      setQuery("");
+      setSelectedCity("");
+      onChange("", undefined);
     }
   };
 
@@ -177,7 +184,7 @@ export function CitySelect({
     }
   };
 
-  const isValidCitySelected = Boolean(selectedCity && locations.some((l) => l.name === selectedCity));
+  const isValidCitySelected = Boolean(selectedCity && locations.some((l) => l.displayLabel.toLowerCase() === query.trim().toLowerCase() || l.name.toLowerCase() === query.trim().toLowerCase()));
 
   return (
     <div className="relative w-full mb-3" ref={containerRef}>
@@ -203,12 +210,12 @@ export function CitySelect({
             setSelectedIndex(0);
 
             const clean = val.trim().toLowerCase();
-            const exact = locations.find(
-              (loc) => loc.name.toLowerCase() === clean || loc.displayLabel.toLowerCase() === clean
+            const exactDisplay = locations.find(
+              (loc) => loc.displayLabel.toLowerCase() === clean
             );
-            if (exact) {
-              setSelectedCity(exact.name);
-              onChange(exact.name, exact);
+            if (exactDisplay) {
+              setSelectedCity(exactDisplay.name);
+              onChange(exactDisplay.name, exactDisplay);
             } else if (!val) {
               setSelectedCity("");
               onChange("", undefined);
@@ -246,11 +253,11 @@ export function CitySelect({
       {isValidCitySelected ? (
         <div className="mt-1 flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold">
           <Check className="w-3.5 h-3.5" />
-          <span>Ciudad de cobertura oficial seleccionada ({selectedCity})</span>
+          <span>Ciudad de cobertura oficial seleccionada ({query})</span>
         </div>
       ) : query.trim().length >= 2 && !isOpen ? (
         <div className="mt-1 flex items-center gap-1 text-[11px] text-amber-600 dark:text-amber-400 font-medium">
-          <span>⚠️ Selecciona una opción del listado para validar la cobertura.</span>
+          <span>⚠️ Selecciona obligatoriamente una opción del desplegable para confirmar la provincia exacta.</span>
         </div>
       ) : null}
 
