@@ -15,13 +15,29 @@ async function resolveLaarCityCode(cityName: string): Promise<string> {
 
   const cleanName = cityName.trim();
   try {
-    const loc = await getPrisma().canonicalLocation.findFirst({
+    // 1. Exact match (equals) on canonical name or laarCityName
+    let loc = await getPrisma().canonicalLocation.findFirst({
       where: {
         active: true,
         OR: [
           { name: { equals: cleanName, mode: "insensitive" } },
           { laarCityName: { equals: cleanName, mode: "insensitive" } },
+        ],
+      },
+      select: { laarCode: true },
+    });
+
+    if (loc?.laarCode) {
+      return String(loc.laarCode);
+    }
+
+    // 2. Partial match (contains) as fallback if no exact match exists
+    loc = await getPrisma().canonicalLocation.findFirst({
+      where: {
+        active: true,
+        OR: [
           { name: { contains: cleanName, mode: "insensitive" } },
+          { laarCityName: { contains: cleanName, mode: "insensitive" } },
         ],
       },
       select: { laarCode: true },
