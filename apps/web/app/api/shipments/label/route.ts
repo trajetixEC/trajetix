@@ -4,47 +4,90 @@ import zlib from "zlib";
 import { getPrisma } from "../../../../lib/prisma";
 import { getLaarAuthToken } from "../../../../lib/integrations/laar-client";
 
-function patchLaarPdfSenderName(pdfBuffer: Buffer, storeName: string): Buffer {
+function patchLaarPdfOrigin(
+  pdfBuffer: Buffer,
+  origin: { name?: string; address?: string; city?: string; phone?: string }
+): Buffer {
   try {
-    const cleanStoreName = storeName.trim();
-    if (!cleanStoreName) return pdfBuffer;
+    const name = (origin.name || "").trim();
+    const address = (origin.address || "").trim();
+    const city = (origin.city || "").trim();
+    const phone = (origin.phone || "").trim();
+
+    if (!name && !address) return pdfBuffer;
 
     const pdfStr = pdfBuffer.toString("latin1");
     const streamRegex = /stream[\r\n]+([\s\S]*?)[\r\n]+endstream/g;
 
     const patchedStr = pdfStr.replace(streamRegex, (match, streamData) => {
       try {
-        const decompressed = zlib.inflateSync(Buffer.from(streamData, "latin1")).toString("latin1");
+        let decompressed = zlib.inflateSync(Buffer.from(streamData, "latin1")).toString("latin1");
         if (
-          decompressed.includes("PLAZA TOALA VICTORIA STEPHANIE") ||
-          decompressed.includes("PLAZA TOALA")
+          decompressed.includes("PLAZA TOALA") ||
+          decompressed.includes("MARTHA DE ROLDOS")
         ) {
-          const replaced = decompressed
-            .replace(/PLAZA TOALA VICTORIA STEPHANIE/g, cleanStoreName)
-            .replace(/PLAZA TOALA VICTORIA/g, cleanStoreName)
-            .replace(/PLAZA TOALA/g, cleanStoreName);
+          if (name) {
+            decompressed = decompressed
+              .replace(/PLAZA TOALA VICTORIA STEPHANIE\s*-\s*92529/g, name)
+              .replace(/PLAZA TOALA VICTORIA STEPHANIE/g, name)
+              .replace(/PLAZA TOALA VICTORIA/g, name)
+              .replace(/PLAZA TOALA/g, name);
+          }
+          if (address) {
+            decompressed = decompressed
+              .replace(/CDLA MARTHA DE ROLDOS,\s*MZN 215 V7\s*\.\.\./g, address)
+              .replace(/CDLA MARTHA DE ROLDOS,\s*MZN 215 V7/g, address)
+              .replace(/CDLA MARTHA DE ROLDOS/g, address);
+          }
+          if (phone) {
+            decompressed = decompressed
+              .replace(/TEL:\s*098\s*293\s*8397/g, `TEL: ${phone}`)
+              .replace(/098\s*293\s*8397/g, phone);
+          }
+          if (city) {
+            decompressed = decompressed.replace(
+              /\(REMITENTE:\)Tj[\s\S]*?\((?:GUAYAQUIL|QUITO|CUENCA)\)Tj/i,
+              (headerMatch) => headerMatch.replace(/\((?:GUAYAQUIL|QUITO|CUENCA)\)Tj/i, `(${city.toUpperCase()})Tj`)
+            );
+          }
 
-          const recompressed = zlib.deflateSync(Buffer.from(replaced, "latin1")).toString("latin1");
+          const recompressed = zlib.deflateSync(Buffer.from(decompressed, "latin1")).toString("latin1");
           return `stream\r\n${recompressed}\r\nendstream`;
         }
       } catch {
         if (
-          streamData.includes("PLAZA TOALA VICTORIA STEPHANIE") ||
-          streamData.includes("PLAZA TOALA")
+          streamData.includes("PLAZA TOALA") ||
+          streamData.includes("MARTHA DE ROLDOS")
         ) {
-          const replaced = streamData
-            .replace(/PLAZA TOALA VICTORIA STEPHANIE/g, cleanStoreName)
-            .replace(/PLAZA TOALA VICTORIA/g, cleanStoreName)
-            .replace(/PLAZA TOALA/g, cleanStoreName);
+          let replaced = streamData;
+          if (name) {
+            replaced = replaced
+              .replace(/PLAZA TOALA VICTORIA STEPHANIE\s*-\s*92529/g, name)
+              .replace(/PLAZA TOALA VICTORIA STEPHANIE/g, name)
+              .replace(/PLAZA TOALA VICTORIA/g, name)
+              .replace(/PLAZA TOALA/g, name);
+          }
+          if (address) {
+            replaced = replaced
+              .replace(/CDLA MARTHA DE ROLDOS,\s*MZN 215 V7\s*\.\.\./g, address)
+              .replace(/CDLA MARTHA DE ROLDOS,\s*MZN 215 V7/g, address)
+              .replace(/CDLA MARTHA DE ROLDOS/g, address);
+          }
+          if (phone) {
+            replaced = replaced
+              .replace(/TEL:\s*098\s*293\s*8397/g, `TEL: ${phone}`)
+              .replace(/098\s*293\s*8397/g, phone);
+          }
           return `stream\r\n${replaced}\r\nendstream`;
         }
       }
       return match;
-    });
+    }
+    );
 
     return Buffer.from(patchedStr, "latin1");
   } catch (err) {
-    console.error("Error al reemplazar remitente en PDF de LAAR:", err);
+    console.error("Error al reemplazar remitente y dirección en PDF de LAAR:", err);
     return pdfBuffer;
   }
 }
@@ -75,8 +118,10 @@ export async function GET(request: Request) {
       return new Response("Número de guía no asignado", { status: 400 });
     }
 
+    const origin = (shipment.origin as { name?: string; line1?: string; city?: string; phone?: string }) || {};
+
     const storeSenderName =
-      (shipment.origin as { name?: string })?.name ||
+      origin.name ||
       shipment.tenant?.displayName ||
       shipment.tenant?.legalName ||
       "Tienda";
@@ -103,7 +148,12 @@ export async function GET(request: Request) {
     }
 
     const rawBuffer = Buffer.from(await pdfResponse.arrayBuffer());
-    const patchedBuffer = patchLaarPdfSenderName(rawBuffer, storeSenderName);
+    const patchedBuffer = patchLaarPdfOrigin(rawBuffer, {
+      name: storeSenderName,
+      address: origin.line1 || "",
+      city: origin.city || "",
+      phone: origin.phone || "",
+    });
 
     return new Response(new Uint8Array(patchedBuffer), {
       headers: {

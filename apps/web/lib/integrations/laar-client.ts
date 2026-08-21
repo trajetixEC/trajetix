@@ -232,9 +232,9 @@ export async function createLaarShipment(
     throw new Error(result.message || "LAAR Courier API no devolvió un número de guía válido");
   }
 
-  // Schedule pickup automatically with LAAR Courier (DESACTIVADO TEMPORALMENTE PARA PRUEBAS)
+  // Schedule pickup automatically with LAAR Courier API (ACTIVADO)
   let pickupCode: string | undefined = undefined;
-  const ENABLE_AUTO_PICKUP = false; // Cambiar a true para reactivar recolecciones automáticas
+  const ENABLE_AUTO_PICKUP = true;
 
   if (ENABLE_AUTO_PICKUP) {
     try {
