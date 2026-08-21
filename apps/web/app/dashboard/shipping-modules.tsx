@@ -3142,26 +3142,26 @@ function ResolveNoveltyModal({
     // 1. Try extracting from local trackingEvents first
     const events = shipment.trackingEvents || [];
     for (const event of events) {
-      const raw = event.raw as any;
+      const raw = event.raw as Record<string, unknown> | null | undefined;
       if (raw?.novedades && Array.isArray(raw.novedades) && raw.novedades.length > 0) {
-        const nov = raw.novedades[raw.novedades.length - 1];
+        const nov = raw.novedades[raw.novedades.length - 1] as Record<string, unknown> | undefined;
         if (nov) {
           setNoveltyDetail({
-            title: nov.nombreTipoNovedad || nov.tipoNovedad || "Excepción en Entrega",
-            description: nov.observacion || nov.nombreDetalleNovedad || "",
-            date: nov.fechaNovedad ? new Date(nov.fechaNovedad).toLocaleString("es-EC") : "",
-            location: nov.regionalNovedad || event.location || "",
+            title: String(nov.nombreTipoNovedad || nov.tipoNovedad || "Excepción en Entrega"),
+            description: String(nov.observacion || nov.nombreDetalleNovedad || ""),
+            date: nov.fechaNovedad ? new Date(String(nov.fechaNovedad)).toLocaleString("es-EC") : "",
+            location: String(nov.regionalNovedad || event.location || ""),
           });
           break;
         }
       }
       if (raw?.imagenes && Array.isArray(raw.imagenes) && raw.imagenes.length > 0) {
-        const img = raw.imagenes.find((i: any) => i.novedad);
+        const img = (raw.imagenes as Array<Record<string, unknown>>).find((i) => i.novedad);
         if (img) {
           setNoveltyDetail({
-            title: img.novedad || "Con Novedad",
-            description: `Reportado por transportista (${img.tipo || "Distribución"})`,
-            date: img.fecha || "",
+            title: String(img.novedad || "Con Novedad"),
+            description: `Reportado por transportista (${String(img.tipo || "Distribución")})`,
+            date: String(img.fecha || ""),
             location: event.location || "",
           });
           break;
@@ -3177,23 +3177,23 @@ function ResolveNoveltyModal({
           if (!isMounted) return;
           const laarNovs = data?.laarData?.novedades;
           if (Array.isArray(laarNovs) && laarNovs.length > 0) {
-            const nov = laarNovs[laarNovs.length - 1];
+            const nov = laarNovs[laarNovs.length - 1] as Record<string, unknown>;
             if (nov) {
               setNoveltyDetail({
-                title: nov.nombreTipoNovedad || nov.nombre || "Novedad en la Entrega",
-                description: nov.observacion || nov.nombreDetalleNovedad || "",
-                date: nov.fechaNovedad || nov.fecha || "",
-                location: nov.regionalNovedad || data?.laarData?.ciudadDestino || "",
+                title: String(nov.nombreTipoNovedad || nov.nombre || "Novedad en la Entrega"),
+                description: String(nov.observacion || nov.nombreDetalleNovedad || ""),
+                date: String(nov.fechaNovedad || nov.fecha || ""),
+                location: String(nov.regionalNovedad || data?.laarData?.ciudadDestino || ""),
               });
             }
           } else if (data?.laarData?.imagenes && Array.isArray(data.laarData.imagenes)) {
-            const img = data.laarData.imagenes.find((i: any) => i.novedad);
+            const img = (data.laarData.imagenes as Array<Record<string, unknown>>).find((i) => i.novedad);
             if (img) {
               setNoveltyDetail({
-                title: img.novedad || "Con Novedad",
+                title: String(img.novedad || "Con Novedad"),
                 description: `Registrado en distribución`,
-                date: img.fecha || "",
-                location: data?.laarData?.ciudadDestino || "",
+                date: String(img.fecha || ""),
+                location: String(data?.laarData?.ciudadDestino || ""),
               });
             }
           }
