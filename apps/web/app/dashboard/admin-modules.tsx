@@ -13,6 +13,14 @@ import {
   Eye,
   RefreshCw,
 } from "lucide-react";
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableHead,
+  TableRow,
+  TableCell,
+} from "../../components/ui/table";
 
 type RechargeItem = {
   id: string;
@@ -851,6 +859,7 @@ export function FinanceModule() {
 type Member = {
   id: string;
   status: "ACTIVE" | "SUSPENDED" | "INVITED";
+  storeName?: string;
   user: {
     id: string;
     name?: string | null;
@@ -994,6 +1003,43 @@ export function StoreUsersModule() {
       status: member.status === "ACTIVE" ? "SUSPENDED" : "ACTIVE",
     });
   }
+  const [impersonatingId, setImpersonatingId] = useState<string | null>(null);
+
+  async function handleImpersonate(member: Member) {
+    const userName = member.user.name || member.user.email;
+    if (
+      !window.confirm(
+        `¿Deseas iniciar sesión en la cuenta de "${userName}" (${member.user.email})?`,
+      )
+    ) {
+      return;
+    }
+    setImpersonatingId(member.user.id);
+    try {
+      const res = await fetch("/api/admin/impersonate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ targetUserId: member.user.id }),
+      });
+      const result = await res.json();
+      if (!res.ok || !result.token) {
+        alert(result.error || "No se pudo iniciar sesión como este usuario");
+        setImpersonatingId(null);
+        return;
+      }
+
+      const { signIn } = await import("next-auth/react");
+      await signIn("credentials", {
+        impersonateToken: result.token,
+        callbackUrl: "/dashboard",
+      });
+    } catch (err) {
+      console.error("Error al iniciar sesión como usuario:", err);
+      alert("Error al intentar iniciar sesión como este usuario.");
+      setImpersonatingId(null);
+    }
+  }
+
   async function remove(member: Member) {
     if (
       window.confirm(
@@ -1004,7 +1050,7 @@ export function StoreUsersModule() {
   }
   const filtered = data.members.filter((member) => {
     const matchesText =
-      `${member.user.name ?? ""} ${member.user.email} ${member.user.phone ?? ""}`
+      `${member.user.name ?? ""} ${member.user.email} ${member.user.phone ?? ""} ${member.storeName ?? ""}`
         .toLowerCase()
         .includes(query.toLowerCase());
     return matchesText && (status === "ALL" || member.status === status);
@@ -1071,32 +1117,38 @@ export function StoreUsersModule() {
             ? "usuario encontrado"
             : "usuarios encontrados"}
         </p>
-        <div className="table-scroll">
-          <table className="users-table">
-            <thead>
-              <tr>
-                <th>Nombre</th>
-                <th>Correo</th>
-                <th>Teléfono</th>
-                <th>Estado</th>
-                <th>Rol</th>
-                <th>Envíos Sin Ganancia</th>
-                <th>Último acceso</th>
-                <th>Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
+        <div className="w-full overflow-x-auto">
+          <Table className="w-full">
+            <TableHeader>
+              <TableRow>
+                <TableHead>Nombre</TableHead>
+                <TableHead>Tienda / Empresa</TableHead>
+                <TableHead>Correo</TableHead>
+                <TableHead>Teléfono</TableHead>
+                <TableHead>Estado</TableHead>
+                <TableHead>Rol</TableHead>
+                <TableHead>Envíos Sin Ganancia</TableHead>
+                <TableHead>Último acceso</TableHead>
+                <TableHead className="text-right">Acciones</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {filtered.map((member) => {
                 const isZeroMargin = zeroMarginUsers.includes(member.user.email);
                 const isSuperAdmin = member.user.platformRole === "SUPER_ADMIN";
                 return (
-                  <tr key={member.id}>
-                    <td>
-                      <strong>{member.user.name ?? "Sin nombre"}</strong>
-                    </td>
-                    <td>{member.user.email}</td>
-                    <td>{member.user.phone || "—"}</td>
-                    <td>
+                  <TableRow key={member.id}>
+                    <TableCell>
+                      <strong className="text-slate-900 dark:text-slate-100">{member.user.name ?? "Sin nombre"}</strong>
+                    </TableCell>
+                    <TableCell>
+                      <span className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 font-bold text-xs border border-slate-200 dark:border-slate-700">
+                        {member.storeName || "Mi tienda"}
+                      </span>
+                    </TableCell>
+                    <TableCell>{member.user.email}</TableCell>
+                    <TableCell>{member.user.phone || "—"}</TableCell>
+                    <TableCell>
                       <span
                         className={`member-status ${member.status.toLowerCase()}`}
                       >
@@ -1106,8 +1158,8 @@ export function StoreUsersModule() {
                             ? "Suspendido"
                             : "Invitado"}
                       </span>
-                    </td>
-                    <td>
+                    </TableCell>
+                    <TableCell>
                       {isSuperAdmin ? (
                         <span className="px-2.5 py-1 bg-purple-100 dark:bg-purple-950/80 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 rounded-md text-xs font-bold font-mono inline-flex items-center gap-1">
                           👑 SuperAdmin
@@ -1127,8 +1179,8 @@ export function StoreUsersModule() {
                           ))}
                         </select>
                       )}
-                    </td>
-                    <td>
+                    </TableCell>
+                    <TableCell>
                       <label className="zero-margin-toggle" title="Al activar, a este usuario NO se le cobrarán márgenes de ganancia (ideal para familiares o amigos).">
                         <input
                           type="checkbox"
@@ -1139,16 +1191,29 @@ export function StoreUsersModule() {
                           {isZeroMargin ? "⚡ Exento (0% Ganancia)" : "Con Ganancia Estándar"}
                         </span>
                       </label>
-                    </td>
-                    <td>
+                    </TableCell>
+                    <TableCell>
                       {member.user.lastLoginAt
                         ? new Date(member.user.lastLoginAt).toLocaleString(
                             "es-EC",
                           )
                         : "Nunca"}
-                    </td>
-                    <td>
-                      <div className="user-actions">
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="user-actions flex items-center justify-end gap-1">
+                        <button
+                          type="button"
+                          aria-label={`Iniciar sesión como ${member.user.name ?? member.user.email}`}
+                          title={`Iniciar sesión como ${member.user.name ?? member.user.email}`}
+                          disabled={impersonatingId === member.user.id}
+                          onClick={() => void handleImpersonate(member)}
+                        >
+                          {impersonatingId === member.user.id ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin inline-block" />
+                          ) : (
+                            "🔑"
+                          )}
+                        </button>
                         <button
                           type="button"
                           aria-label="Editar usuario"
@@ -1183,12 +1248,12 @@ export function StoreUsersModule() {
                           ⌫
                         </button>
                       </div>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 );
               })}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
           {filtered.length === 0 && (
             <div className="empty">
               <h3>No encontramos usuarios</h3>

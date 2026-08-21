@@ -12,10 +12,13 @@ import { findActiveReferral, REFERRAL_COOKIE } from "./lib/referrals";
 import { isTeamProfile, SYSTEM_ROLES, SYSTEM_ROLE_LABELS } from "./lib/rbac";
 import { authConfig } from "./auth.config";
 
+import { verifyImpersonateToken } from "./lib/impersonate";
+
 const credentialsSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(8),
+  email: z.string().email().optional(),
+  password: z.string().min(8).optional(),
   otp: z.string().optional(),
+  impersonateToken: z.string().optional(),
 });
 const providers: any[] = [Google];
 if (process.env.RESEND_API_KEY)
@@ -37,10 +40,28 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         email: { label: "Correo", type: "email" },
         password: { label: "Contraseña", type: "password" },
         otp: { label: "Código 2FA", type: "text" },
+        impersonateToken: { label: "Token de Impersonación", type: "text" },
       },
       async authorize(raw: Record<string, any>) {
+        if (raw?.impersonateToken && typeof raw.impersonateToken === "string") {
+          const verified = verifyImpersonateToken(raw.impersonateToken);
+          if (verified) {
+            const user = await getPrisma().user.findUnique({
+              where: { id: verified.targetUserId },
+            });
+            if (user) {
+              return {
+                id: user.id,
+                email: user.email,
+                name: user.name,
+                image: user.image,
+              };
+            }
+          }
+        }
+
         const parsed = credentialsSchema.safeParse(raw);
-        if (!parsed.success) return null;
+        if (!parsed.success || !parsed.data.email || !parsed.data.password) return null;
         const user = await getPrisma().user.findUnique({
           where: { email: parsed.data.email.toLowerCase() },
         });

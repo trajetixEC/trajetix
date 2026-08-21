@@ -155,8 +155,8 @@ export async function createLaarShipment(
       ciudadO: originCityCode,
       nombreO: input.origin.name || "Remitente",
       direccion: input.origin.line1 || "Dirección de Origen",
-      referencia: "",
-      numeroCasa: "",
+      referencia: input.origin.reference || input.origin.line1 || "Bodega de Origen",
+      numeroCasa: "SN",
       postal: "",
       telefono: input.origin.phone || "0999999999",
       celular: input.origin.phone || "0999999999",
@@ -186,7 +186,7 @@ export async function createLaarShipment(
     costoflete: 0,
     costoproducto: isCod ? codAmount : 0,
     tipocobro: isCod ? 1 : 0,
-    comentario: input.origin.name ? `Tienda: ${input.origin.name}` : "Despacho Trajetix ERP",
+    comentario: input.origin.name ? `Origen: ${input.origin.name} - ${input.origin.line1}` : "Despacho Trajetix ERP",
     fechaPedido: "",
     retorno: {
       tipoServicio: "",
@@ -198,8 +198,8 @@ export async function createLaarShipment(
     },
     extras: {
       campo1: input.origin.name || "",
-      campo2: "Trajetix ERP",
-      campo3: "",
+      campo2: input.origin.line1 || "Trajetix ERP",
+      campo3: input.origin.phone || "",
     },
   };
 
@@ -232,29 +232,33 @@ export async function createLaarShipment(
     throw new Error(result.message || "LAAR Courier API no devolvió un número de guía válido");
   }
 
-  // Schedule pickup automatically with LAAR Courier
-  let pickupCode: string | undefined;
-  try {
-    const pickupRes = await scheduleLaarPickup({
-      guias: [result.guia],
-      cantidad: totalPieces > 0 ? totalPieces : 1,
-      comentario: input.parcels[0]?.description || "PAQUETE ERP",
-      remitente: {
-        nombreCompleto: input.origin.name,
-        calle1: input.origin.line1,
-        telefono: input.origin.phone,
-        celular: input.origin.phone,
-        ciudad: input.origin.city,
-        referencia: input.origin.reference || "Bodega de Origen",
-        correo: input.origin.email || "contacto@tienda.com",
-      },
-    });
+  // Schedule pickup automatically with LAAR Courier (DESACTIVADO TEMPORALMENTE PARA PRUEBAS)
+  let pickupCode: string | undefined = undefined;
+  const ENABLE_AUTO_PICKUP = false; // Cambiar a true para reactivar recolecciones automáticas
 
-    if (pickupRes?.isSuccess && pickupRes?.objetoADeserializar?.g31_Id) {
-      pickupCode = pickupRes.objetoADeserializar.g31_Id;
+  if (ENABLE_AUTO_PICKUP) {
+    try {
+      const pickupRes = await scheduleLaarPickup({
+        guias: [result.guia],
+        cantidad: totalPieces > 0 ? totalPieces : 1,
+        comentario: input.parcels[0]?.description || "PAQUETE ERP",
+        remitente: {
+          nombreCompleto: input.origin.name,
+          calle1: input.origin.line1,
+          telefono: input.origin.phone,
+          celular: input.origin.phone,
+          ciudad: input.origin.city,
+          referencia: input.origin.reference || "Bodega de Origen",
+          correo: input.origin.email || "contacto@tienda.com",
+        },
+      });
+
+      if (pickupRes?.isSuccess && pickupRes?.objetoADeserializar?.g31_Id) {
+        pickupCode = pickupRes.objetoADeserializar.g31_Id;
+      }
+    } catch (pickupErr) {
+      console.warn("Aviso al agendar recolección automática en LAAR:", pickupErr);
     }
-  } catch (pickupErr) {
-    console.warn("Aviso al agendar recolección automática en LAAR:", pickupErr);
   }
 
   return {

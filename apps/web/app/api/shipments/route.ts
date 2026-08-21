@@ -61,6 +61,12 @@ export async function GET() {
     const { tenantId } = await requireTenant("shipments:read");
     const shipments = await getPrisma().shipment.findMany({
       where: { tenantId },
+      include: {
+        trackingEvents: {
+          orderBy: { occurredAt: "desc" },
+          take: 5,
+        },
+      },
       orderBy: { createdAt: "desc" },
       take: 250,
     });
@@ -85,6 +91,14 @@ export async function GET() {
         quoted: Number(shipment.quotedMinor ?? 0) / 100,
         labelUrl: shipment.labelUrl,
         createdAt: shipment.createdAt,
+        trackingEvents: shipment.trackingEvents.map((e) => ({
+          status: e.status,
+          description: e.description,
+          location: e.location,
+          occurredAt: e.occurredAt,
+          raw: e.raw,
+        })),
+        metadata: shipment.metadata,
       })),
     );
   } catch (error) {
@@ -264,9 +278,11 @@ export async function POST(request: Request) {
     });
 
     const storeSenderName =
-      (tenant?.displayName && tenant.displayName.trim() !== "" && tenant.displayName !== "Mi organización")
+      (data.senderName && data.senderName.trim() !== "" && data.senderName !== "Remitente")
+        ? data.senderName.trim()
+        : (tenant?.displayName && tenant.displayName.trim() !== "" && tenant.displayName !== "Mi organización")
         ? tenant.displayName.trim()
-        : (tenant?.legalName && tenant.legalName.trim() !== "" ? tenant.legalName.trim() : data.senderName);
+        : (tenant?.legalName && tenant.legalName.trim() !== "" ? tenant.legalName.trim() : "Remitente");
 
     // 4. GENERAR GUÍA CON LA TRANSPORTADORA (LAAR COURIER)
     let label;

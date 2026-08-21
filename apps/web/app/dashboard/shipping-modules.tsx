@@ -29,6 +29,7 @@ import {
   EyeOff,
   Star,
   X,
+  Printer,
 } from "lucide-react";
 import { CarrierConfigModal } from "./carrier-config-modal";
 import { CitySelect } from "./city-select";
@@ -37,6 +38,21 @@ import {
   getZeroMarginUsers,
   loadCarrierConfig,
 } from "../../lib/carrier-config-store";
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableHead,
+  TableRow,
+  TableCell,
+} from "../../components/ui/table";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from "../../components/ui/dropdown-menu";
 
 type Warehouse = {
   id: string;
@@ -1927,6 +1943,7 @@ type Shipment = {
   status: string;
   eta: string;
   sender?: { name?: string; city?: string };
+  origin?: { name?: string; phone?: string; city?: string; line1?: string; warehouseId?: string | null };
   recipient?: { name?: string; phone?: string };
   address?: { city?: string; line1?: string };
   packages?: Array<{
@@ -1939,6 +1956,18 @@ type Shipment = {
   quoted?: number;
   labelUrl?: string | null;
   createdAt?: string;
+  trackingEvents?: Array<{
+    status: string;
+    description?: string;
+    location?: string;
+    occurredAt?: string;
+    raw?: unknown;
+  }>;
+  metadata?: {
+    manifestId?: string | null;
+    manifestCreatedAt?: string | null;
+    [key: string]: unknown;
+  };
 };
 
 type ShipmentFilters = {
@@ -1949,6 +1978,16 @@ type ShipmentFilters = {
   guide: string;
   from: string;
   to: string;
+};
+
+type ManifestHistoryItem = {
+  manifestId: string;
+  createdAt: string;
+  shipments: Shipment[];
+  carriers: string[];
+  totalPackages: number;
+  totalWeight: number;
+  totalCod: number;
 };
 
 const shipmentStatusNames: Record<string, string> = {
@@ -1996,16 +2035,457 @@ function hasGeneratedGuide(shipment: Shipment) {
   );
 }
 
+function isShipmentSelectableForManifest(shipment: Shipment) {
+  if (shipment.metadata?.manifestId) return false;
+  const ineligible = ["IN_TRANSIT", "OUT_FOR_DELIVERY", "DELIVERED", "CANCELLED", "RETURNED"];
+  if (ineligible.includes((shipment.status || "").toUpperCase())) return false;
+  return true;
+}
+
+function DispatchFloatingIsland({
+  selectedCount,
+  totalPackages,
+  totalCod,
+  isGenerating,
+  onGenerate,
+  onClear,
+}: {
+  selectedCount: number;
+  totalPackages: number;
+  totalCod: number;
+  isGenerating: boolean;
+  onGenerate: () => void;
+  onClear: () => void;
+}) {
+  return (
+    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 bg-slate-900/95 dark:bg-slate-950/95 backdrop-blur-md text-white border border-slate-700/80 rounded-2xl shadow-2xl px-5 py-3.5 flex items-center gap-5 md:gap-8 font-sans max-w-xl w-[92vw] md:w-auto justify-between transition-all animate-in slide-in-from-bottom duration-300">
+      <div className="flex items-center gap-3">
+        <div className="w-9 h-9 rounded-xl bg-red-600/20 border border-red-500/40 flex items-center justify-center text-red-400 font-bold text-sm">
+          {selectedCount}
+        </div>
+        <div className="text-xs space-y-0.5">
+          <p className="font-bold text-white text-sm leading-none">
+            {selectedCount} {selectedCount === 1 ? "envío seleccionado" : "envíos seleccionados"}
+          </p>
+          <p className="text-slate-400 text-[11px]">
+            {totalPackages} {totalPackages === 1 ? "paquete" : "paquetes"} · Recaudo COD:{" "}
+            <strong className="text-emerald-400 font-bold">{money(totalCod)}</strong>
+          </p>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={onClear}
+          className="text-xs text-slate-400 hover:text-white transition-colors underline hidden sm:inline"
+        >
+          Desmarcar
+        </button>
+        <button
+          type="button"
+          onClick={onGenerate}
+          disabled={isGenerating}
+          className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-bold text-xs rounded-xl shadow-lg transition-all flex items-center gap-2 disabled:opacity-50"
+        >
+          {isGenerating ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <FileText className="w-4 h-4" />
+          )}
+          <span>Generar Relación</span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function DispatchHistoryModal({
+  onClose,
+  onViewManifest,
+}: {
+  onClose: () => void;
+  onViewManifest: (shipments: Shipment[]) => void;
+}) {
+  const [loading, setLoading] = useState(true);
+  const [manifests, setManifests] = useState<ManifestHistoryItem[]>([]);
+
+  useEffect(() => {
+    fetch("/api/shipments/manifests")
+      .then((res) => res.json())
+      .then((data) => {
+        setManifests(data.manifests || []);
+      })
+      .catch((err) => console.error("Error al cargar historial de manifiestos:", err))
+      .finally(() => setLoading(false));
+  }, []);
+
+  return (
+    <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 font-sans">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl max-w-3xl w-full max-h-[85vh] flex flex-col overflow-hidden text-slate-900 dark:text-slate-100">
+        <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-900/90">
+          <div className="flex items-center gap-2">
+            <Receipt className="w-5 h-5 text-red-600 dark:text-red-400" />
+            <h3 className="font-bold text-base text-slate-900 dark:text-white">
+              Historial de Relaciones de Despacho
+            </h3>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-1.5 rounded-xl text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="p-5 overflow-y-auto flex-1 space-y-4">
+          {loading ? (
+            <div className="py-12 text-center text-slate-500 flex flex-col items-center gap-2">
+              <Loader2 className="w-6 h-6 animate-spin text-red-600" />
+              <p className="text-xs">Cargando manifiestos anteriores...</p>
+            </div>
+          ) : manifests.length === 0 ? (
+            <div className="py-12 text-center text-slate-500 space-y-2">
+              <p className="text-2xl">📜</p>
+              <p className="font-semibold text-sm">No se han generado relaciones de despacho aún</p>
+              <p className="text-xs opacity-75">
+                Selecciona las guías elegibles en &quot;Mis envíos&quot; y genera tu primera relación de despacho.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {manifests.map((m) => (
+                <div
+                  key={m.manifestId}
+                  className="p-4 border border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50/50 dark:bg-slate-900/50 hover:border-slate-300 dark:hover:border-slate-700 transition-all flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
+                >
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-extrabold text-sm font-mono text-red-600 dark:text-red-400">
+                        {m.manifestId}
+                      </span>
+                      <span className="px-2 py-0.5 bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded text-[10px] font-bold">
+                        {m.carriers.join(", ") || "LAAR Courier"}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-600 dark:text-slate-400">
+                      📅 {new Date(m.createdAt).toLocaleString("es-EC")} · 📦 {m.shipments.length} guías ({m.totalPackages} paquetes) · COD: <strong className="text-emerald-600 dark:text-emerald-400">{money(m.totalCod)}</strong>
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onClose();
+                      onViewManifest(m.shipments);
+                    }}
+                    className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:hover:bg-white text-white dark:text-slate-900 font-semibold text-xs rounded-lg shadow-sm transition-colors flex items-center gap-1.5"
+                  >
+                    <Printer className="w-3.5 h-3.5" />
+                    <span>Ver / Imprimir</span>
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DispatchManifestModal({
+  shipments,
+  user,
+  warehouses,
+  onClose,
+}: {
+  shipments: Shipment[];
+  user?: { name?: string; email?: string; role?: string; tenant?: string; permissions?: string[] } | undefined;
+  warehouses?: Warehouse[] | undefined;
+  onClose: () => void;
+}) {
+  const merchantName = user?.tenant && user.tenant !== "Mi organización" ? user.tenant : "Trajetix Logistics";
+  const nowStr = new Date().toLocaleString("es-EC", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+  const manifestId = useMemo(
+    () => `MAN-${Math.floor(100000 + Math.random() * 900000)}`,
+    [],
+  );
+
+  const totalShipments = shipments.length;
+  const totalPackages = shipments.reduce(
+    (sum, s) =>
+      sum +
+      (s.packages ?? []).reduce((pSum, p) => pSum + (p.quantity ?? 1), 0),
+    0,
+  );
+  const totalWeight = shipments.reduce((sum, s) => sum + shipmentWeight(s), 0);
+  const totalCod = shipments.reduce((sum, s) => sum + (s.cod ?? 0), 0);
+
+  const originSample = shipments[0]?.origin;
+  const primaryWarehouse = warehouses && warehouses.length > 0 ? warehouses[0] : null;
+  const originName = originSample?.name || merchantName;
+  const originCity = originSample?.city || primaryWarehouse?.city || "";
+  const originAddress = originSample?.line1 || primaryWarehouse?.address || "";
+  const originPhone = originSample?.phone || primaryWarehouse?.phone || "";
+
+  const carriers = [...new Set(shipments.map((s) => s.carrier).filter(Boolean))];
+  const carrierText = carriers.length > 0 ? carriers.join(", ") : "LAAR Courier / Operador Logístico";
+
+  const handlePrint = () => {
+    window.print();
+  };
+
+  return (
+    <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto font-sans">
+      <style>{`
+        @media print {
+          body * {
+            visibility: hidden !important;
+          }
+          #dispatch-manifest-print-area, #dispatch-manifest-print-area * {
+            visibility: visible !important;
+          }
+          #dispatch-manifest-print-area {
+            position: absolute !important;
+            left: 0 !important;
+            top: 0 !important;
+            width: 100% !important;
+            background: white !important;
+            color: #0f172a !important;
+            padding: 12mm !important;
+            margin: 0 !important;
+            box-shadow: none !important;
+            border: none !important;
+            border-radius: 0 !important;
+          }
+          .no-print {
+            display: none !important;
+          }
+        }
+      `}</style>
+
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl max-w-4xl w-full max-h-[92vh] flex flex-col overflow-hidden text-slate-900 dark:text-slate-100">
+        <div className="no-print p-4 bg-slate-50 dark:bg-slate-900/90 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <FileText className="w-5 h-5 text-red-600 dark:text-red-400" />
+            <h3 className="font-bold text-slate-900 dark:text-white text-base">
+              Relación de Despacho ({totalShipments} envíos)
+            </h3>
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={handlePrint}
+              className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-semibold text-xs rounded-xl shadow transition-colors flex items-center gap-2"
+            >
+              <Printer className="w-4 h-4" />
+              Imprimir / Guardar PDF
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-2 rounded-xl text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+
+        <div className="p-6 md:p-8 overflow-y-auto space-y-6 bg-white text-slate-900" id="dispatch-manifest-print-area">
+          <div className="flex items-start justify-between border-b-2 border-slate-900 pb-4">
+            <div>
+              <span className="text-[11px] font-extrabold tracking-widest text-red-600 uppercase">
+                TRAJETIX LOGISTICS ERP · N° {manifestId}
+              </span>
+              <h1 className="text-xl md:text-2xl font-black text-slate-900 tracking-tight mt-0.5">
+                RELACIÓN DE DESPACHO / MANIFIESTO DE CARGA
+              </h1>
+              <p className="text-xs text-slate-600 mt-1">
+                Documento oficial de entrega física y transferencia de custodia entre el Remitente y el Courier.
+              </p>
+            </div>
+            <div className="text-right text-xs space-y-1 text-slate-700">
+              <div><strong>Fecha / Hora:</strong> {nowStr}</div>
+              <div><strong>Transportadora:</strong> <span className="font-bold text-red-600">{carrierText}</span></div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4 p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs">
+            <div>
+              <span className="font-bold text-slate-500 text-[10px] uppercase block mb-1">DATOS DEL REMITENTE / COMERCIO</span>
+              <p className="font-bold text-slate-900 text-sm">{originName}</p>
+              <p className="text-slate-600">📍 <strong>Origen:</strong> {originCity} — {originAddress}</p>
+              {originPhone && <p className="text-slate-600">📞 <strong>Teléfono:</strong> {originPhone}</p>}
+            </div>
+            <div>
+              <span className="font-bold text-slate-500 text-[10px] uppercase block mb-1">RESUMEN DEL DESPACHO</span>
+              <div className="grid grid-cols-2 gap-2 text-slate-700 pt-1">
+                <div>📦 <strong>Total Paquetes:</strong> {totalPackages}</div>
+                <div>⚖️ <strong>Peso Total:</strong> {totalWeight.toFixed(2)} kg</div>
+                <div>🏷️ <strong>Total Guías:</strong> {totalShipments}</div>
+                <div>💰 <strong>Recaudo COD:</strong> <span className="font-bold text-emerald-700">{money(totalCod)}</span></div>
+              </div>
+            </div>
+          </div>
+
+          <div className="border border-slate-300 rounded-xl overflow-hidden">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr className="bg-slate-100 border-b border-slate-300 text-slate-700 font-bold uppercase text-[10px]">
+                  <th className="p-2 text-center border-r border-slate-200 w-8">#</th>
+                  <th className="p-2 border-r border-slate-200">Guía / Tracking</th>
+                  <th className="p-2 border-r border-slate-200">Referencia</th>
+                  <th className="p-2 border-r border-slate-200">Destinatario</th>
+                  <th className="p-2 border-r border-slate-200">Ciudad Destino</th>
+                  <th className="p-2 border-r border-slate-200">Contenido / Prod.</th>
+                  <th className="p-2 text-center border-r border-slate-200">Peso (kg)</th>
+                  <th className="p-2 text-right border-r border-slate-200">Cobro COD ($)</th>
+                  <th className="p-2 text-center w-12">Check</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200 text-slate-800">
+                {shipments.map((item, idx) => {
+                  const contentDesc =
+                    item.packages?.map((p) => `${p.quantity || 1}x ${p.description || "Paquete"}`).join(", ") ||
+                    "Mercadería";
+                  const isCod = (item.cod ?? 0) > 0;
+                  return (
+                    <tr key={item.id} className={idx % 2 === 1 ? "bg-slate-50/60" : "bg-white"}>
+                      <td className="p-2 text-center font-bold text-slate-500 border-r border-slate-200">{idx + 1}</td>
+                      <td className="p-2 font-extrabold text-slate-900 border-r border-slate-200 tracking-wide font-mono">
+                        {item.tracking || item.orderId}
+                      </td>
+                      <td className="p-2 text-slate-600 border-r border-slate-200">{item.orderId}</td>
+                      <td className="p-2 border-r border-slate-200">
+                        <strong className="block text-slate-900">{item.recipient?.name || "Sin nombre"}</strong>
+                        <span className="text-[10px] text-slate-500">{item.recipient?.phone || ""}</span>
+                      </td>
+                      <td className="p-2 font-medium border-r border-slate-200">{item.address?.city || "—"}</td>
+                      <td className="p-2 text-slate-600 border-r border-slate-200 max-w-[150px] truncate" title={contentDesc}>
+                        {contentDesc}
+                      </td>
+                      <td className="p-2 text-center border-r border-slate-200">{shipmentWeight(item).toFixed(2)}</td>
+                      <td className="p-2 text-right border-r border-slate-200">
+                        {isCod ? (
+                          <strong className="text-emerald-700 font-bold">{money(item.cod!)}</strong>
+                        ) : (
+                          <span className="text-slate-400">$0.00</span>
+                        )}
+                      </td>
+                      <td className="p-2 text-center">
+                        <div className="w-4 h-4 border border-slate-400 rounded mx-auto"></div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+              <tfoot>
+                <tr className="bg-slate-100 font-bold border-t-2 border-slate-400 text-slate-900">
+                  <td colSpan={6} className="p-2.5 text-right border-r border-slate-300 uppercase text-[10px]">
+                    Totales Generales ({totalShipments} guías)
+                  </td>
+                  <td className="p-2.5 text-center border-r border-slate-300">{totalWeight.toFixed(2)} kg</td>
+                  <td className="p-2.5 text-right border-r border-slate-300 text-emerald-800 font-black">{money(totalCod)}</td>
+                  <td></td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+
+          <div className="p-3 bg-amber-50/50 border border-amber-200 rounded-lg text-[11px] text-amber-900 leading-snug">
+            <strong>Declaración de Transferencia y Custodia:</strong> El transportista / courier autoriza la firma de este documento declarando recibir de conformidad los paquetes detallados en este manifiesto en buen estado, cerrados y rotulados. Ambas partes acuerdan que este registro físico constituye constancia irrevocable del retiro de la paquetería.
+          </div>
+
+          <div className="grid grid-cols-2 gap-8 pt-4">
+            <div className="border border-slate-300 rounded-xl p-4 space-y-3 bg-slate-50/30">
+              <div className="border-b border-slate-200 pb-2">
+                <h4 className="font-black text-slate-900 text-xs uppercase tracking-wider">
+                  1. ENTREGADO POR (REMITENTE / TIENDA)
+                </h4>
+                <p className="text-[10px] text-slate-500">Firma del encargado que entrega la mercadería</p>
+              </div>
+
+              <div className="space-y-2 text-xs pt-1">
+                <div className="flex items-center gap-1 text-slate-700">
+                  <span className="w-28 text-slate-500 font-medium">Nombre Completo:</span>
+                  <span className="border-b border-slate-300 flex-1 font-semibold text-slate-900">{originName}</span>
+                </div>
+                <div className="flex items-center gap-1 text-slate-700">
+                  <span className="w-28 text-slate-500 font-medium">Cédula / RUC:</span>
+                  <span className="border-b border-slate-300 flex-1">___________________________</span>
+                </div>
+                <div className="flex items-center gap-1 text-slate-700">
+                  <span className="w-28 text-slate-500 font-medium">Hora de Entrega:</span>
+                  <span className="border-b border-slate-300 flex-1">___________________________</span>
+                </div>
+              </div>
+
+              <div className="pt-8 text-center">
+                <div className="border-t border-slate-400 w-3/4 mx-auto pt-1 text-slate-700 text-xs font-bold">
+                  Firma del Cliente / Despachador
+                </div>
+              </div>
+            </div>
+
+            <div className="border border-slate-300 rounded-xl p-4 space-y-3 bg-slate-50/30">
+              <div className="border-b border-slate-200 pb-2">
+                <h4 className="font-black text-slate-900 text-xs uppercase tracking-wider text-red-600">
+                  2. RECIBIDO POR (TRANSPORTISTA / COURIER)
+                </h4>
+                <p className="text-[10px] text-slate-500">Firma del conductor o repartidor que retira</p>
+              </div>
+
+              <div className="space-y-2 text-xs pt-1">
+                <div className="flex items-center gap-1 text-slate-700">
+                  <span className="w-28 text-slate-500 font-medium">Transportadora:</span>
+                  <span className="border-b border-slate-300 flex-1 font-bold text-red-700">{carrierText}</span>
+                </div>
+                <div className="flex items-center gap-1 text-slate-700">
+                  <span className="w-28 text-slate-500 font-medium">Nombre Chofer:</span>
+                  <span className="border-b border-slate-300 flex-1">___________________________</span>
+                </div>
+                <div className="flex items-center gap-1 text-slate-700">
+                  <span className="w-28 text-slate-500 font-medium">Cédula / Placa:</span>
+                  <span className="border-b border-slate-300 flex-1">___________________________</span>
+                </div>
+                <div className="flex items-center gap-1 text-slate-700">
+                  <span className="w-28 text-slate-500 font-medium">Hora de Retiro:</span>
+                  <span className="border-b border-slate-300 flex-1">___________________________</span>
+                </div>
+              </div>
+
+              <div className="pt-6 text-center">
+                <div className="border-t border-slate-400 w-3/4 mx-auto pt-1 text-slate-700 text-xs font-bold">
+                  Firma y Sello del Transportista
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function MyShipmentsModule({
   shipments,
   query,
   onNew,
   onRefresh,
+  user,
+  warehouses,
 }: {
   shipments: Shipment[];
   query: string;
   onNew: () => void;
   onRefresh?: () => void;
+  user?: { name?: string; email?: string; role?: string; tenant?: string; permissions?: string[] } | undefined;
+  warehouses?: Warehouse[] | undefined;
 }) {
   const [filters, setFilters] = useState<ShipmentFilters>({
     search: "",
@@ -2017,9 +2497,13 @@ export function MyShipmentsModule({
     to: "",
   });
   const [expanded, setExpanded] = useState<string | null>(null);
-  const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
   const [cancelingShipment, setCancelingShipment] = useState<Shipment | null>(null);
   const [resolvingNoveltyShipment, setResolvingNoveltyShipment] = useState<Shipment | null>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [showManifestModal, setShowManifestModal] = useState(false);
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [isGeneratingManifest, setIsGeneratingManifest] = useState(false);
+  const [activeManifestShipments, setActiveManifestShipments] = useState<Shipment[] | null>(null);
 
   const [isSyncing, setIsSyncing] = useState(false);
 
@@ -2084,6 +2568,93 @@ export function MyShipmentsModule({
     });
   }, [filters, query, shipments]);
 
+  const selectableFiltered = useMemo(
+    () => filtered.filter(isShipmentSelectableForManifest),
+    [filtered],
+  );
+
+  const isAllSelectableChecked = useMemo(() => {
+    if (selectableFiltered.length === 0) return false;
+    return selectableFiltered.every((item) => selectedIds.includes(item.id));
+  }, [selectableFiltered, selectedIds]);
+
+  const toggleSelectAll = () => {
+    if (isAllSelectableChecked) {
+      setSelectedIds((prev) => prev.filter((id) => !selectableFiltered.some((item) => item.id === id)));
+    } else {
+      const newIds = new Set([...selectedIds, ...selectableFiltered.map((item) => item.id)]);
+      setSelectedIds(Array.from(newIds));
+    }
+  };
+
+  const toggleSelectOne = (id: string) => {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  };
+
+  const selectedShipments = useMemo(
+    () => shipments.filter((s) => selectedIds.includes(s.id)),
+    [shipments, selectedIds],
+  );
+
+  const floatingPackagesCount = useMemo(
+    () =>
+      selectedShipments.reduce(
+        (sum, s) =>
+          sum + (s.packages ?? []).reduce((pSum, p) => pSum + (p.quantity ?? 1), 0),
+        0,
+      ),
+    [selectedShipments],
+  );
+
+  const floatingTotalCod = useMemo(
+    () => selectedShipments.reduce((sum, s) => sum + (s.cod ?? 0), 0),
+    [selectedShipments],
+  );
+
+  async function handleGenerateManifest(targetShipments?: Shipment[]) {
+    const target = targetShipments || selectedShipments;
+    if (target.length === 0) return;
+
+    setIsGeneratingManifest(true);
+    try {
+      const res = await fetch("/api/shipments/manifests", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ shipmentIds: target.map((s) => s.id) }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || "No se pudo registrar la relación de despacho");
+        setIsGeneratingManifest(false);
+        return;
+      }
+
+      const manifestId = data.manifestId;
+      const manifestCreatedAt = data.manifestCreatedAt;
+
+      const updatedTarget = target.map((s) => ({
+        ...s,
+        metadata: {
+          ...(s.metadata || {}),
+          manifestId,
+          manifestCreatedAt,
+        },
+      }));
+
+      if (onRefresh) onRefresh();
+
+      setActiveManifestShipments(updatedTarget);
+      setSelectedIds((prev) => prev.filter((id) => !target.some((t) => t.id === id)));
+    } catch (err) {
+      console.error("Error generating manifest:", err);
+      alert("Ocurrió un error al generar la relación de despacho.");
+    } finally {
+      setIsGeneratingManifest(false);
+    }
+  }
+
   const updateFilter = (key: keyof ShipmentFilters, value: string) =>
     setFilters((current) => ({ ...current, [key]: value }));
   const clearFilters = () =>
@@ -2105,9 +2676,20 @@ export function MyShipmentsModule({
           <h1>Mis envíos</h1>
           <p>Gestiona y rastrea todos tus despachos.</p>
         </div>
-        <button className="primary-button" onClick={onNew}>
-          ＋ Nuevo envío
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            className="secondary-button flex items-center gap-1.5 font-medium"
+            type="button"
+            onClick={() => setShowHistoryModal(true)}
+            title="Ver relaciones de despacho anteriores y reimprimir"
+          >
+            <Receipt className="w-4 h-4 text-slate-600 dark:text-slate-300" />
+            <span>Historial de Despachos</span>
+          </button>
+          <button className="primary-button" onClick={onNew}>
+            ＋ Nuevo envío
+          </button>
+        </div>
       </div>
 
       <section className="panel shipment-filter-panel" aria-label="Filtros de envíos">
@@ -2190,9 +2772,32 @@ export function MyShipmentsModule({
             </select>
           </label>
         </div>
-        <div className="shipment-filter-footer flex items-center justify-between">
+        <div className="shipment-filter-footer flex items-center justify-between flex-wrap gap-2">
           <strong>{filtered.length} despachos encontrados</strong>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              className="secondary-button flex items-center gap-1.5 font-semibold text-slate-800 dark:text-slate-100 border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800"
+              type="button"
+              onClick={() => {
+                if (selectedIds.length > 0) {
+                  void handleGenerateManifest();
+                } else if (selectableFiltered.length > 0) {
+                  void handleGenerateManifest(selectableFiltered);
+                } else {
+                  alert("No hay guías elegibles seleccionadas ni filtradas para generar una relación de despacho.");
+                }
+              }}
+              disabled={filtered.length === 0 || isGeneratingManifest}
+              title="Generar e imprimir Relación de Despacho (Manifiesto con firmas) para el courier"
+            >
+              {isGeneratingManifest ? (
+                <Loader2 className="w-4 h-4 animate-spin text-red-600" />
+              ) : (
+                <FileText className="w-4 h-4 text-red-600 dark:text-red-400" />
+              )}
+              <span>Relación de Despacho {selectedIds.length > 0 ? `(${selectedIds.length})` : ""}</span>
+            </button>
+
             <button
               className="secondary-button flex items-center gap-1.5 font-medium"
               type="button"
@@ -2210,58 +2815,97 @@ export function MyShipmentsModule({
         </div>
       </section>
 
-      <section className="panel table-panel shipment-management-panel" style={{ overflow: "visible" }}>
-        <div className="table-scroll" style={{ overflowX: "auto", overflowY: "visible" }}>
-          <table className="shipment-management-table">
-            <thead>
-              <tr>
-                <th>Guía / referencia</th>
-                <th>Courier</th>
-                <th>Destinatario</th>
-                <th>Peso / valor</th>
-                <th>Fecha</th>
-                <th>Estado</th>
-                <th className="text-right">Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((item, index) => {
+      <section className="panel table-panel shipment-management-panel">
+        <div className="w-full overflow-x-auto">
+          <Table className="w-full">
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-10 text-center">
+                  <input
+                    type="checkbox"
+                    checked={isAllSelectableChecked}
+                    onChange={toggleSelectAll}
+                    disabled={selectableFiltered.length === 0}
+                    className="w-4 h-4 rounded border-slate-300 text-red-600 focus:ring-red-500 cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                    title="Seleccionar / deseleccionar todos los despachos elegibles"
+                  />
+                </TableHead>
+                <TableHead>Guía / referencia</TableHead>
+                <TableHead>Courier</TableHead>
+                <TableHead>Destinatario</TableHead>
+                <TableHead>Peso / valor</TableHead>
+                <TableHead>Fecha</TableHead>
+                <TableHead>Estado</TableHead>
+                <TableHead className="text-right">Acciones</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filtered.map((item) => {
                 const generated = hasGeneratedGuide(item);
                 const weight = shipmentWeight(item);
-                const openUp = index >= Math.max(1, filtered.length - 2);
+                const isSelected = selectedIds.includes(item.id);
+                const isSelectable = isShipmentSelectableForManifest(item);
+                const manifestCode = item.metadata?.manifestId;
+
                 return (
                   <Fragment key={item.id}>
-                    <tr>
-                      <td>
-                        <strong className="shipment-guide">
-                          {generated ? item.tracking : item.orderId}
-                        </strong>
-                        <small>{item.orderId}</small>
-                      </td>
-                      <td>
-                        <strong>{item.carrier || "Por asignar"}</strong>
-                        <small>{item.service || "Servicio por confirmar"}</small>
-                      </td>
-                      <td>
-                        <strong>{item.recipient?.name ?? "Sin destinatario"}</strong>
-                        <small>
+                    <TableRow className={isSelected ? "bg-red-50/40 dark:bg-red-950/20" : ""}>
+                      <TableCell className="text-center">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          disabled={!isSelectable}
+                          onChange={() => toggleSelectOne(item.id)}
+                          className="w-4 h-4 rounded border-slate-300 text-red-600 focus:ring-red-500 cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                          title={
+                            manifestCode
+                              ? `Ya pertenece al Manifiesto #${manifestCode}`
+                              : !isSelectable
+                              ? `No elegible para despacho (Estado: ${item.status})`
+                              : "Seleccionar para relación de despacho"
+                          }
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <strong className="shipment-guide font-bold text-slate-900 dark:text-slate-100">
+                            {generated ? item.tracking : item.orderId}
+                          </strong>
+                          {manifestCode && (
+                            <span
+                              className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-mono text-[10px] font-bold border border-slate-200 dark:border-slate-700"
+                              title={`Manifiesto asignado #${manifestCode}`}
+                            >
+                              📄 {manifestCode}
+                            </span>
+                          )}
+                        </div>
+                        <small className="text-slate-500 block text-[11px]">{item.orderId}</small>
+                      </TableCell>
+                      <TableCell>
+                        <strong className="block text-slate-900 dark:text-slate-100">{item.carrier || "Por asignar"}</strong>
+                        <small className="text-slate-500 block text-[11px]">{item.service || "Servicio por confirmar"}</small>
+                      </TableCell>
+                      <TableCell>
+                        <strong className="block text-slate-900 dark:text-slate-100">{item.recipient?.name ?? "Sin destinatario"}</strong>
+                        <small className="text-slate-500 block text-[11px]">
                           {[item.address?.city, item.address?.line1]
                             .filter(Boolean)
                             .join(" · ") || "Sin dirección"}
                         </small>
-                      </td>
-                      <td>
-                        <strong>{weight.toFixed(2)} kg</strong>
-                        <small>{money(shipmentValue(item))}</small>
+                      </TableCell>
+                      <TableCell>
+                        <strong className="block text-slate-900 dark:text-slate-100">{weight.toFixed(2)} kg</strong>
+                        <small className="text-slate-500 block text-[11px]">{money(shipmentValue(item))}</small>
                         {(item.cod ?? 0) > 0 && <em className="cod-badge">COD</em>}
-                      </td>
-                      <td>
-                        <strong>
+                      </TableCell>
+                      <TableCell>
+                        <strong className="block text-slate-900 dark:text-slate-100">
                           {item.createdAt
                             ? new Date(item.createdAt).toLocaleDateString("es-EC")
                             : "—"}
                         </strong>
-                        <small>
+                        <small className="text-slate-500 block text-[11px]">
                           {item.createdAt
                             ? new Date(item.createdAt).toLocaleTimeString("es-EC", {
                                 hour: "2-digit",
@@ -2269,8 +2913,8 @@ export function MyShipmentsModule({
                               })
                             : ""}
                         </small>
-                      </td>
-                      <td>
+                      </TableCell>
+                      <TableCell>
                         <div className="flex flex-col gap-1 items-start">
                           <span
                             className={`shipment-status shipment-status-${shipmentStatusClass(item.status)}`}
@@ -2288,27 +2932,21 @@ export function MyShipmentsModule({
                             </button>
                           )}
                         </div>
-                      </td>
-                      <td className="text-right relative">
-                        <div className="relative inline-block text-left">
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setOpenDropdownId(openDropdownId === item.id ? null : item.id);
-                            }}
-                            className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition-colors inline-flex items-center gap-1 border border-slate-200 dark:border-slate-800"
-                            title="Opciones de acción"
-                          >
-                            <MoreVertical className="w-4 h-4" />
-                          </button>
-
-                          {openDropdownId === item.id && (
-                            <div
-                              className={`absolute right-0 ${openUp ? "bottom-full mb-1" : "top-full mt-1"} w-48 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-2xl z-50 py-1 font-sans text-xs text-left`}
-                              onClick={(e) => e.stopPropagation()}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button
+                              type="button"
+                              className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition-colors inline-flex items-center gap-1 border border-slate-200 dark:border-slate-800"
+                              title="Opciones de acción"
                             >
-                              {(item.labelUrl || item.tracking) && (
+                              <MoreVertical className="w-4 h-4" />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-48 font-sans">
+                            {(item.labelUrl || item.tracking) && (
+                              <DropdownMenuItem asChild>
                                 <a
                                   href={
                                     item.labelUrl && !item.labelUrl.includes("laarcourier.com")
@@ -2317,93 +2955,75 @@ export function MyShipmentsModule({
                                   }
                                   target="_blank"
                                   rel="noreferrer"
-                                  className="flex items-center gap-2.5 px-3 py-2 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-                                  onClick={() => setOpenDropdownId(null)}
+                                  className="flex items-center gap-2.5 text-slate-700 dark:text-slate-200 cursor-pointer"
                                 >
                                   <FileText className="w-3.5 h-3.5 text-blue-500" />
-                                  Ver / Imprimir Guía
+                                  <span>Ver / Imprimir Guía</span>
                                 </a>
-                              )}
+                              </DropdownMenuItem>
+                            )}
 
-                              {generated && (
+                            {generated && (
+                              <DropdownMenuItem asChild>
                                 <a
                                   href={`/tracking?guia=${encodeURIComponent(item.tracking)}`}
                                   target="_blank"
                                   rel="noreferrer"
-                                  className="flex items-center gap-2.5 px-3 py-2 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-                                  onClick={() => setOpenDropdownId(null)}
+                                  className="flex items-center gap-2.5 text-slate-700 dark:text-slate-200 cursor-pointer"
                                 >
                                   <Truck className="w-3.5 h-3.5 text-emerald-500" />
-                                  Rastrear Envío
+                                  <span>Rastrear Envío</span>
                                 </a>
-                              )}
+                              </DropdownMenuItem>
+                            )}
 
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setExpanded((current) => (current === item.id ? null : item.id));
-                                  setOpenDropdownId(null);
-                                }}
-                                className="w-full text-left flex items-center gap-2.5 px-3 py-2 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-                              >
-                                <Eye className="w-3.5 h-3.5 text-slate-400" />
-                                {expanded === item.id ? "Ocultar Detalle" : "Ver Detalle"}
-                              </button>
+                            <DropdownMenuItem
+                              onClick={() => setExpanded((current) => (current === item.id ? null : item.id))}
+                              className="flex items-center gap-2.5 text-slate-700 dark:text-slate-200 cursor-pointer"
+                            >
+                              <Eye className="w-3.5 h-3.5 text-slate-400" />
+                              <span>{expanded === item.id ? "Ocultar Detalle" : "Ver Detalle"}</span>
+                            </DropdownMenuItem>
 
-                              {item.status === "EXCEPTION" && (
-                                <>
-                                  <div className="my-1 border-t border-slate-100 dark:border-slate-800" />
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setOpenDropdownId(null);
-                                      setResolvingNoveltyShipment(item);
-                                    }}
-                                    className="w-full text-left flex items-center gap-2.5 px-3 py-2 text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40 transition-colors font-semibold"
-                                  >
-                                    <AlertCircle className="w-3.5 h-3.5 text-amber-500" />
-                                    Resolver Novedad
-                                  </button>
-                                </>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
+                            {item.status === "EXCEPTION" && (
+                              <>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  onClick={() => setResolvingNoveltyShipment(item)}
+                                  className="flex items-center gap-2.5 text-amber-600 dark:text-amber-400 font-semibold cursor-pointer"
+                                >
+                                  <AlertCircle className="w-3.5 h-3.5 text-amber-500" />
+                                  <span>Resolver Novedad</span>
+                                </DropdownMenuItem>
+                              </>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
                     {expanded === item.id && (
-                      <tr className="shipment-detail-row">
-                        <td colSpan={7}>
-                          <div className="shipment-detail-grid">
-                            <span>
-                              <small>Remitente</small>
-                              <strong>{item.sender?.name || "No registrado"}</strong>
-                              <em>{item.sender?.city || ""}</em>
-                            </span>
-                            <span>
-                              <small>Destinatario</small>
-                              <strong>{item.recipient?.name || "No registrado"}</strong>
-                              <em>{item.recipient?.phone || ""}</em>
-                            </span>
-                            <span>
-                              <small>Destino</small>
-                              <strong>{item.address?.city || "No registrado"}</strong>
-                              <em>{item.address?.line1 || ""}</em>
-                            </span>
-                            <span>
-                              <small>Valores</small>
-                              <strong>Flete {money(item.quoted ?? 0)}</strong>
-                              <em>Recaudo {money(item.cod ?? 0)}</em>
-                            </span>
+                      <TableRow className="bg-slate-50/80 dark:bg-slate-900/80">
+                        <TableCell colSpan={8}>
+                          <div className="p-3 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                            <div>
+                              <small className="text-slate-500 block uppercase font-bold text-[10px]">Remitente</small>
+                              <strong className="text-slate-900 dark:text-slate-100 block font-semibold">{item.sender?.name || item.origin?.name || "No registrado"}</strong>
+                              <em className="text-slate-500 not-italic block">{item.sender?.city || item.origin?.city || ""}</em>
+                            </div>
+                            <div>
+                              <small className="text-slate-500 block uppercase font-bold text-[10px]">Destinatario</small>
+                              <strong className="text-slate-900 dark:text-slate-100 block font-semibold">{item.recipient?.name || "No registrado"}</strong>
+                              <em className="text-slate-500 not-italic block">{item.recipient?.phone || ""}</em>
+                            </div>
                           </div>
-                        </td>
-                      </tr>
+                        </TableCell>
+                      </TableRow>
                     )}
                   </Fragment>
                 );
               })}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
           {filtered.length === 0 && (
             <div className="empty shipment-empty">
               <span>▣</span>
@@ -2420,6 +3040,46 @@ export function MyShipmentsModule({
           )}
         </div>
       </section>
+
+      {/* Floating Action Island for selected shipments */}
+      {selectedIds.length > 0 && (
+        <DispatchFloatingIsland
+          selectedCount={selectedIds.length}
+          totalPackages={floatingPackagesCount}
+          totalCod={floatingTotalCod}
+          isGenerating={isGeneratingManifest}
+          onGenerate={() => void handleGenerateManifest()}
+          onClear={() => setSelectedIds([])}
+        />
+      )}
+
+      {/* Manifest History Modal */}
+      {showHistoryModal && (
+        <DispatchHistoryModal
+          onClose={() => setShowHistoryModal(false)}
+          onViewManifest={(manifestShipments) => {
+            setActiveManifestShipments(manifestShipments);
+          }}
+        />
+      )}
+
+      {/* Active Manifest Modal (for printing) */}
+      {(activeManifestShipments || showManifestModal) && (
+        <DispatchManifestModal
+          shipments={
+            activeManifestShipments ||
+            (selectedIds.length > 0
+              ? shipments.filter((s) => selectedIds.includes(s.id))
+              : selectableFiltered)
+          }
+          user={user}
+          warehouses={warehouses}
+          onClose={() => {
+            setActiveManifestShipments(null);
+            setShowManifestModal(false);
+          }}
+        />
+      )}
 
       {cancelingShipment && (
         <CancelShipmentModal
@@ -2468,6 +3128,89 @@ function ResolveNoveltyModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  const [noveltyDetail, setNoveltyDetail] = useState<{
+    title: string;
+    description?: string;
+    date?: string;
+    location?: string;
+  } | null>(null);
+  const [loadingNovelty, setLoadingNovelty] = useState(true);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    // 1. Try extracting from local trackingEvents first
+    const events = shipment.trackingEvents || [];
+    for (const event of events) {
+      const raw = event.raw as any;
+      if (raw?.novedades && Array.isArray(raw.novedades) && raw.novedades.length > 0) {
+        const nov = raw.novedades[raw.novedades.length - 1];
+        if (nov) {
+          setNoveltyDetail({
+            title: nov.nombreTipoNovedad || nov.tipoNovedad || "Excepción en Entrega",
+            description: nov.observacion || nov.nombreDetalleNovedad || "",
+            date: nov.fechaNovedad ? new Date(nov.fechaNovedad).toLocaleString("es-EC") : "",
+            location: nov.regionalNovedad || event.location || "",
+          });
+          break;
+        }
+      }
+      if (raw?.imagenes && Array.isArray(raw.imagenes) && raw.imagenes.length > 0) {
+        const img = raw.imagenes.find((i: any) => i.novedad);
+        if (img) {
+          setNoveltyDetail({
+            title: img.novedad || "Con Novedad",
+            description: `Reportado por transportista (${img.tipo || "Distribución"})`,
+            date: img.fecha || "",
+            location: event.location || "",
+          });
+          break;
+        }
+      }
+    }
+
+    // 2. Fetch live tracking data for freshest courier novelty status
+    if (shipment.tracking) {
+      fetch(`/api/tracking/${encodeURIComponent(shipment.tracking)}`)
+        .then((res) => res.json())
+        .then((data) => {
+          if (!isMounted) return;
+          const laarNovs = data?.laarData?.novedades;
+          if (Array.isArray(laarNovs) && laarNovs.length > 0) {
+            const nov = laarNovs[laarNovs.length - 1];
+            if (nov) {
+              setNoveltyDetail({
+                title: nov.nombreTipoNovedad || nov.nombre || "Novedad en la Entrega",
+                description: nov.observacion || nov.nombreDetalleNovedad || "",
+                date: nov.fechaNovedad || nov.fecha || "",
+                location: nov.regionalNovedad || data?.laarData?.ciudadDestino || "",
+              });
+            }
+          } else if (data?.laarData?.imagenes && Array.isArray(data.laarData.imagenes)) {
+            const img = data.laarData.imagenes.find((i: any) => i.novedad);
+            if (img) {
+              setNoveltyDetail({
+                title: img.novedad || "Con Novedad",
+                description: `Registrado en distribución`,
+                date: img.fecha || "",
+                location: data?.laarData?.ciudadDestino || "",
+              });
+            }
+          }
+        })
+        .catch((err) => console.error("Error consultando novedad en vivo:", err))
+        .finally(() => {
+          if (isMounted) setLoadingNovelty(false);
+        });
+    } else {
+      setLoadingNovelty(false);
+    }
+
+    return () => {
+      isMounted = false;
+    };
+  }, [shipment]);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!observacion.trim()) {
@@ -2510,17 +3253,58 @@ function ResolveNoveltyModal({
     <div className="modal-backdrop" onMouseDown={onClose}>
       <section className="modal max-w-xl w-full" onMouseDown={(e) => e.stopPropagation()}>
         <button className="modal-close" onClick={onClose}>×</button>
-        <span className="eyebrow text-amber-500 flex items-center gap-1.5 font-semibold">
-          <AlertCircle className="w-4 h-4 text-amber-400" />
+        <span className="eyebrow text-amber-600 dark:text-amber-400 flex items-center gap-1.5 font-bold">
+          <AlertCircle className="w-4 h-4 text-amber-500" />
           GESTIÓN DE NOVEDAD LAAR COURIER
         </span>
-        <h2 className="text-lg font-bold mt-1">Solucionar Novedad de Guía</h2>
-        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 mb-4">
-          Guía: <strong className="font-mono text-slate-900 dark:text-white">{shipment.tracking || shipment.id}</strong> · Destinatario: <strong className="text-slate-200">{(recipient.name as string) || "Cliente"}</strong>
+        <h2 className="text-lg font-extrabold text-slate-900 dark:text-slate-100 mt-1">Solucionar Novedad de Guía</h2>
+        <p className="text-xs text-slate-600 dark:text-slate-400 mt-1 mb-3">
+          Guía: <strong className="font-mono text-slate-900 dark:text-white font-bold">{shipment.tracking || shipment.id}</strong> · Destinatario: <strong className="text-slate-900 dark:text-slate-100 font-bold">{(recipient.name as string) || "Cliente"}</strong>
         </p>
 
+        {/* Dynamic Novelty Details Banner */}
+        <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-900 dark:text-amber-200 mb-4">
+          <div className="flex items-center gap-2 font-bold text-xs text-amber-700 dark:text-amber-400 mb-1.5 uppercase tracking-wide">
+            <AlertCircle className="w-4 h-4 text-amber-500 flex-shrink-0" />
+            <span>Novedad Reportada por el Repartidor (LAAR Courier):</span>
+          </div>
+          {loadingNovelty ? (
+            <div className="flex items-center gap-2 text-xs text-amber-700 dark:text-amber-400 py-1 font-medium">
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              <span>Consultando motivo de la novedad con la transportadora...</span>
+            </div>
+          ) : noveltyDetail ? (
+            <div className="space-y-1">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <strong className="text-sm font-black text-amber-900 dark:text-amber-100 uppercase tracking-wide">
+                  ⚠️ {noveltyDetail.title}
+                </strong>
+                {noveltyDetail.date && (
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-500/20 text-amber-800 dark:text-amber-300 font-bold">
+                    {noveltyDetail.date}
+                  </span>
+                )}
+              </div>
+              {noveltyDetail.description && (
+                <p className="text-xs text-slate-800 dark:text-slate-200 font-medium">
+                  {noveltyDetail.description}
+                </p>
+              )}
+              {noveltyDetail.location && (
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">
+                  📍 Ubicación: {noveltyDetail.location}
+                </p>
+              )}
+            </div>
+          ) : (
+            <p className="text-xs text-amber-900 dark:text-amber-200 font-semibold italic">
+              El transportista indicó una novedad o inconveniente durante la visita de entrega.
+            </p>
+          )}
+        </div>
+
         {error && (
-          <div className="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 text-xs flex items-center gap-2">
+          <div className="mb-4 p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-600 dark:text-red-400 text-xs font-semibold flex items-center gap-2">
             <AlertCircle className="w-4 h-4 flex-shrink-0" />
             <span>{error}</span>
           </div>
@@ -2528,22 +3312,22 @@ function ResolveNoveltyModal({
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-xs font-semibold mb-2">Acción Requerida *</label>
+            <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-2">Acción Requerida *</label>
             <div className="grid grid-cols-2 gap-3">
               <button
                 type="button"
                 onClick={() => setAction("RETRY_DELIVERY")}
-                className={`p-3 rounded-xl border text-left text-xs transition-all ${
+                className={`p-3.5 rounded-xl border text-left text-xs transition-all ${
                   action === "RETRY_DELIVERY"
-                    ? "border-amber-500 bg-amber-500/10 text-amber-300 font-semibold"
-                    : "border-slate-800 bg-slate-900/50 text-slate-400 hover:bg-slate-800"
+                    ? "border-amber-500 bg-amber-50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200 font-bold shadow-sm ring-2 ring-amber-500/20"
+                    : "border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
                 }`}
               >
-                <div className="flex items-center gap-2 text-sm mb-1">
-                  <Truck className="w-4 h-4 text-amber-400" />
+                <div className="flex items-center gap-2 text-sm mb-1 font-bold text-amber-700 dark:text-amber-400">
+                  <Truck className="w-4 h-4 text-amber-500" />
                   Reintentar Entrega
                 </div>
-                <p className="text-[0.7rem] font-normal opacity-80">
+                <p className="text-[0.725rem] font-normal text-slate-600 dark:text-slate-400 leading-tight">
                   Actualiza o confirma dirección y solicita nueva visita del courier.
                 </p>
               </button>
@@ -2551,17 +3335,17 @@ function ResolveNoveltyModal({
               <button
                 type="button"
                 onClick={() => setAction("RETURN_TO_SENDER")}
-                className={`p-3 rounded-xl border text-left text-xs transition-all ${
+                className={`p-3.5 rounded-xl border text-left text-xs transition-all ${
                   action === "RETURN_TO_SENDER"
-                    ? "border-red-500 bg-red-500/10 text-red-300 font-semibold"
-                    : "border-slate-800 bg-slate-900/50 text-slate-400 hover:bg-slate-800"
+                    ? "border-red-500 bg-red-50 dark:bg-red-950/40 text-red-900 dark:text-red-200 font-bold shadow-sm ring-2 ring-red-500/20"
+                    : "border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
                 }`}
               >
-                <div className="flex items-center gap-2 text-sm mb-1">
-                  <Ban className="w-4 h-4 text-red-400" />
+                <div className="flex items-center gap-2 text-sm mb-1 font-bold text-red-700 dark:text-red-400">
+                  <Ban className="w-4 h-4 text-red-500" />
                   Solicitar Devolución
                 </div>
-                <p className="text-[0.7rem] font-normal opacity-80">
+                <p className="text-[0.725rem] font-normal text-slate-600 dark:text-slate-400 leading-tight">
                   Ordena el retorno del paquete al remitente o bodega de origen.
                 </p>
               </button>
@@ -2569,13 +3353,13 @@ function ResolveNoveltyModal({
           </div>
 
           {action === "RETRY_DELIVERY" && (
-            <div className="space-y-3 p-4 rounded-xl bg-slate-900/80 border border-slate-800">
-              <h3 className="text-xs font-semibold text-slate-200 border-b border-slate-800 pb-2">
+            <div className="space-y-3 p-4 rounded-xl bg-slate-50 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800">
+              <h3 className="text-xs font-bold text-slate-900 dark:text-slate-100 border-b border-slate-200 dark:border-slate-800 pb-2">
                 Datos de Destino Corregidos / Confirmados
               </h3>
 
               <div className="grid grid-cols-2 gap-3">
-                <label className="block text-xs">
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
                   Calle Principal *
                   <input
                     type="text"
@@ -2583,11 +3367,11 @@ function ResolveNoveltyModal({
                     value={callePrincipal}
                     onChange={(e) => setCallePrincipal(e.target.value)}
                     placeholder="Ej. Av. 10 de Agosto"
-                    className="w-full mt-1 p-2 text-xs bg-slate-950 border border-slate-800 rounded-lg text-slate-100"
+                    className="w-full mt-1.5 p-2.5 text-xs bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-lg text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:ring-2 focus:ring-amber-500 focus:outline-none"
                   />
                 </label>
 
-                <label className="block text-xs">
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
                   Numeración / Piso / Casa *
                   <input
                     type="text"
@@ -2595,13 +3379,13 @@ function ResolveNoveltyModal({
                     value={numeracion}
                     onChange={(e) => setNumeracion(e.target.value)}
                     placeholder="Ej. N24-102 o S/N"
-                    className="w-full mt-1 p-2 text-xs bg-slate-950 border border-slate-800 rounded-lg text-slate-100"
+                    className="w-full mt-1.5 p-2.5 text-xs bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-lg text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:ring-2 focus:ring-amber-500 focus:outline-none"
                   />
                 </label>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
-                <label className="block text-xs">
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
                   Calle Secundaria *
                   <input
                     type="text"
@@ -2609,11 +3393,11 @@ function ResolveNoveltyModal({
                     value={calleSecundaria}
                     onChange={(e) => setCalleSecundaria(e.target.value)}
                     placeholder="Ej. Mariana de Jesús"
-                    className="w-full mt-1 p-2 text-xs bg-slate-950 border border-slate-800 rounded-lg text-slate-100"
+                    className="w-full mt-1.5 p-2.5 text-xs bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-lg text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:ring-2 focus:ring-amber-500 focus:outline-none"
                   />
                 </label>
 
-                <label className="block text-xs">
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
                   Teléfono / Celular Destinatario *
                   <input
                     type="tel"
@@ -2621,12 +3405,12 @@ function ResolveNoveltyModal({
                     value={telefono}
                     onChange={(e) => setTelefono(e.target.value)}
                     placeholder="Ej. 0991234567"
-                    className="w-full mt-1 p-2 text-xs bg-slate-950 border border-slate-800 rounded-lg text-slate-100"
+                    className="w-full mt-1.5 p-2.5 text-xs bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-lg text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:ring-2 focus:ring-amber-500 focus:outline-none"
                   />
                 </label>
               </div>
 
-              <label className="block text-xs">
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
                 Referencia de Entrega Ubicacional *
                 <input
                   type="text"
@@ -2634,13 +3418,13 @@ function ResolveNoveltyModal({
                   value={referencia}
                   onChange={(e) => setReferencia(e.target.value)}
                   placeholder="Ej. Frente a la farmacia Fybeca, casa verde 2 pisos"
-                  className="w-full mt-1 p-2 text-xs bg-slate-950 border border-slate-800 rounded-lg text-slate-100"
+                  className="w-full mt-1.5 p-2.5 text-xs bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-lg text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:ring-2 focus:ring-amber-500 focus:outline-none"
                 />
               </label>
             </div>
           )}
 
-          <label className="block text-xs font-semibold">
+          <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
             {action === "RETRY_DELIVERY"
               ? "Instrucciones u Observación para el Repartidor *"
               : "Motivo / Justificación de la Devolución *"}
@@ -2654,17 +3438,22 @@ function ResolveNoveltyModal({
                   ? "Ej. Cliente atiende a partir de las 14:00. Llamar antes de llegar al número registrado."
                   : "Ej. Cliente desistió de la compra tras contacto telefónico."
               }
-              className="w-full mt-1.5 p-2.5 text-xs bg-slate-950 border border-slate-800 rounded-lg text-slate-100"
+              className="w-full mt-1.5 p-2.5 text-xs bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-lg text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:ring-2 focus:ring-amber-500 focus:outline-none"
             />
           </label>
 
           <div className="modal-actions mt-6 flex justify-end gap-2">
-            <button type="button" className="secondary-button" onClick={onClose} disabled={loading}>
+            <button
+              type="button"
+              className="secondary-button font-medium text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800"
+              onClick={onClose}
+              disabled={loading}
+            >
               Cancelar
             </button>
             <button
               type="submit"
-              className="primary-button bg-amber-600 hover:bg-amber-700 text-white flex items-center gap-2"
+              className="primary-button bg-red-600 hover:bg-red-700 text-white font-bold inline-flex items-center justify-center gap-1.5"
               disabled={loading}
             >
               {loading ? (

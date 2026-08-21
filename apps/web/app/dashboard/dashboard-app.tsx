@@ -685,6 +685,9 @@ export function DashboardApp({
               shipments={store.shipments}
               query={query}
               onNew={() => setSection("Nuevo envío")}
+              onRefresh={loadOperationalData}
+              user={user}
+              warehouses={store.warehouses}
             />
           )}
           {section === "Envíos Clientes" && <CustomerShipmentsModule />}

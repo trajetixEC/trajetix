@@ -103,6 +103,7 @@ export async function GET(_request: Request, context: { params: Promise<{ tracki
       recipient: laarData?.para ? laarData.para : (recipient?.name ? `${recipient.name.slice(0, 1)}***` : ""),
       updatedAt: shipment?.updatedAt || new Date(),
       events,
+      laarData,
     });
   } catch (error) {
     console.error("Error al consultar el rastreo de la guía:", error);

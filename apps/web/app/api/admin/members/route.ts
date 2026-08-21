@@ -58,6 +58,12 @@ export async function GET() {
     const members = await prisma.membership.findMany({
       where: isSuperAdmin ? {} : { tenantId },
       include: {
+        tenant: {
+          select: {
+            displayName: true,
+            legalName: true,
+          },
+        },
         user: {
           select: {
             id: true,
@@ -88,6 +94,7 @@ export async function GET() {
         return {
           id: member.id,
           status: member.status,
+          storeName: member.tenant?.displayName || member.tenant?.legalName || "Mi tienda",
           user: member.user,
           roles: member.roles.map(({ role }) => ({
             id: role.id,
