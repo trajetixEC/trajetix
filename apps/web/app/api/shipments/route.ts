@@ -8,6 +8,7 @@ import {
   verifyQuote,
 } from "../../../lib/integrations/carrier-gateway";
 import { createLaarShipment } from "../../../lib/integrations/laar-client";
+import { generateNextTrackingNumber } from "../../../lib/tracking-number";
 
 import {
   calculateCarrierFreightRate,
@@ -284,11 +285,15 @@ export async function POST(request: Request) {
         ? tenant.displayName.trim()
         : (tenant?.legalName && tenant.legalName.trim() !== "" ? tenant.legalName.trim() : "Remitente");
 
+    const trackingRef = (data.reference && data.reference.trim() !== "" && !data.reference.includes("TRJ"))
+      ? data.reference.trim()
+      : await generateNextTrackingNumber();
+
     // 4. GENERAR GUÍA CON LA TRANSPORTADORA (LAAR COURIER)
     let label;
     try {
       label = await createLaarShipment({
-        reference: data.reference || `TRJ${Date.now()}`,
+        reference: trackingRef,
         origin: {
           name: storeSenderName,
           phone: data.senderPhone,

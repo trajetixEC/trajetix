@@ -2243,7 +2243,21 @@ function DispatchManifestModal({
   return (
     <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto font-sans">
       <style>{`
+        @page {
+          size: A4 portrait;
+          margin: 6mm 8mm;
+        }
         @media print {
+          html, body {
+            width: 100% !important;
+            height: auto !important;
+            background: #ffffff !important;
+            color: #0f172a !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
           body * {
             visibility: hidden !important;
           }
@@ -2255,16 +2269,33 @@ function DispatchManifestModal({
             left: 0 !important;
             top: 0 !important;
             width: 100% !important;
+            max-width: 194mm !important;
+            box-sizing: border-box !important;
             background: white !important;
             color: #0f172a !important;
-            padding: 12mm !important;
+            padding: 0 !important;
             margin: 0 !important;
             box-shadow: none !important;
             border: none !important;
             border-radius: 0 !important;
+            font-size: 10px !important;
           }
           .no-print {
             display: none !important;
+          }
+          .manifest-table {
+            table-layout: fixed !important;
+            width: 100% !important;
+            font-size: 9px !important;
+          }
+          .manifest-table th, .manifest-table td {
+            padding: 3px 4px !important;
+            word-break: break-word !important;
+            overflow-wrap: break-word !important;
+          }
+          .manifest-signatures {
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
           }
         }
       `}</style>
@@ -2284,7 +2315,7 @@ function DispatchManifestModal({
               className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-semibold text-xs rounded-xl shadow transition-colors flex items-center gap-2"
             >
               <Printer className="w-4 h-4" />
-              Imprimir / Guardar PDF
+              Imprimir / Guardar PDF (A4)
             </button>
             <button
               type="button"
@@ -2296,35 +2327,35 @@ function DispatchManifestModal({
           </div>
         </div>
 
-        <div className="p-6 md:p-8 overflow-y-auto space-y-6 bg-white text-slate-900" id="dispatch-manifest-print-area">
-          <div className="flex items-start justify-between border-b-2 border-slate-900 pb-4">
+        <div className="p-6 md:p-8 overflow-y-auto space-y-5 bg-white text-slate-900" id="dispatch-manifest-print-area">
+          <div className="flex items-start justify-between border-b-2 border-slate-900 pb-3">
             <div>
-              <span className="text-[11px] font-extrabold tracking-widest text-red-600 uppercase">
+              <span className="text-[10px] font-extrabold tracking-widest text-red-600 uppercase">
                 TRAJETIX LOGISTICS ERP · N° {manifestId}
               </span>
-              <h1 className="text-xl md:text-2xl font-black text-slate-900 tracking-tight mt-0.5">
+              <h1 className="text-lg md:text-xl font-black text-slate-900 tracking-tight mt-0.5">
                 RELACIÓN DE DESPACHO / MANIFIESTO DE CARGA
               </h1>
-              <p className="text-xs text-slate-600 mt-1">
+              <p className="text-[11px] text-slate-600 mt-0.5">
                 Documento oficial de entrega física y transferencia de custodia entre el Remitente y el Courier.
               </p>
             </div>
-            <div className="text-right text-xs space-y-1 text-slate-700">
+            <div className="text-right text-[11px] space-y-0.5 text-slate-700">
               <div><strong>Fecha / Hora:</strong> {nowStr}</div>
               <div><strong>Transportadora:</strong> <span className="font-bold text-red-600">{carrierText}</span></div>
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4 p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs">
+          <div className="grid grid-cols-2 gap-3 p-3 bg-slate-50 border border-slate-200 rounded-xl text-[11px]">
             <div>
-              <span className="font-bold text-slate-500 text-[10px] uppercase block mb-1">DATOS DEL REMITENTE / COMERCIO</span>
-              <p className="font-bold text-slate-900 text-sm">{originName}</p>
+              <span className="font-bold text-slate-500 text-[9px] uppercase block mb-1">DATOS DEL REMITENTE / COMERCIO</span>
+              <p className="font-bold text-slate-900 text-xs">{originName}</p>
               <p className="text-slate-600">📍 <strong>Origen:</strong> {originCity} — {originAddress}</p>
               {originPhone && <p className="text-slate-600">📞 <strong>Teléfono:</strong> {originPhone}</p>}
             </div>
             <div>
-              <span className="font-bold text-slate-500 text-[10px] uppercase block mb-1">RESUMEN DEL DESPACHO</span>
-              <div className="grid grid-cols-2 gap-2 text-slate-700 pt-1">
+              <span className="font-bold text-slate-500 text-[9px] uppercase block mb-1">RESUMEN DEL DESPACHO</span>
+              <div className="grid grid-cols-2 gap-1 text-slate-700 pt-0.5">
                 <div>📦 <strong>Total Paquetes:</strong> {totalPackages}</div>
                 <div>⚖️ <strong>Peso Total:</strong> {totalWeight.toFixed(2)} kg</div>
                 <div>🏷️ <strong>Total Guías:</strong> {totalShipments}</div>
@@ -2334,18 +2365,18 @@ function DispatchManifestModal({
           </div>
 
           <div className="border border-slate-300 rounded-xl overflow-hidden">
-            <table className="w-full text-left text-xs border-collapse">
+            <table className="manifest-table table-layout-fixed w-full text-left text-[10px] border-collapse">
               <thead>
-                <tr className="bg-slate-100 border-b border-slate-300 text-slate-700 font-bold uppercase text-[10px]">
-                  <th className="p-2 text-center border-r border-slate-200 w-8">#</th>
-                  <th className="p-2 border-r border-slate-200">Guía / Tracking</th>
-                  <th className="p-2 border-r border-slate-200">Referencia</th>
-                  <th className="p-2 border-r border-slate-200">Destinatario</th>
-                  <th className="p-2 border-r border-slate-200">Ciudad Destino</th>
-                  <th className="p-2 border-r border-slate-200">Contenido / Prod.</th>
-                  <th className="p-2 text-center border-r border-slate-200">Peso (kg)</th>
-                  <th className="p-2 text-right border-r border-slate-200">Cobro COD ($)</th>
-                  <th className="p-2 text-center w-12">Check</th>
+                <tr className="bg-slate-100 border-b border-slate-300 text-slate-700 font-bold uppercase text-[9px]">
+                  <th className="p-1.5 text-center border-r border-slate-200 w-[4%]">#</th>
+                  <th className="p-1.5 border-r border-slate-200 w-[18%]">Guía / Tracking</th>
+                  <th className="p-1.5 border-r border-slate-200 w-[11%]">Referencia</th>
+                  <th className="p-1.5 border-r border-slate-200 w-[18%]">Destinatario</th>
+                  <th className="p-1.5 border-r border-slate-200 w-[12%]">Ciudad Destino</th>
+                  <th className="p-1.5 border-r border-slate-200 w-[20%]">Contenido / Prod.</th>
+                  <th className="p-1.5 text-center border-r border-slate-200 w-[7%]">Peso (kg)</th>
+                  <th className="p-1.5 text-right border-r border-slate-200 w-[7%]">Cobro COD ($)</th>
+                  <th className="p-1.5 text-center w-[3%]">✓</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200 text-slate-800">
@@ -2356,111 +2387,111 @@ function DispatchManifestModal({
                   const isCod = (item.cod ?? 0) > 0;
                   return (
                     <tr key={item.id} className={idx % 2 === 1 ? "bg-slate-50/60" : "bg-white"}>
-                      <td className="p-2 text-center font-bold text-slate-500 border-r border-slate-200">{idx + 1}</td>
-                      <td className="p-2 font-extrabold text-slate-900 border-r border-slate-200 tracking-wide font-mono">
+                      <td className="p-1.5 text-center font-bold text-slate-500 border-r border-slate-200 text-[9px]">{idx + 1}</td>
+                      <td className="p-1.5 font-extrabold text-slate-900 border-r border-slate-200 tracking-wide font-mono text-[9.5px] break-all">
                         {item.tracking || item.orderId}
                       </td>
-                      <td className="p-2 text-slate-600 border-r border-slate-200">{item.orderId}</td>
-                      <td className="p-2 border-r border-slate-200">
-                        <strong className="block text-slate-900">{item.recipient?.name || "Sin nombre"}</strong>
-                        <span className="text-[10px] text-slate-500">{item.recipient?.phone || ""}</span>
+                      <td className="p-1.5 text-slate-600 border-r border-slate-200 text-[9px] break-all">{item.orderId || "—"}</td>
+                      <td className="p-1.5 border-r border-slate-200 leading-tight">
+                        <strong className="block text-slate-900 text-[9.5px] truncate">{item.recipient?.name || "Sin nombre"}</strong>
+                        <span className="text-[8.5px] text-slate-500 block">{item.recipient?.phone || ""}</span>
                       </td>
-                      <td className="p-2 font-medium border-r border-slate-200">{item.address?.city || "—"}</td>
-                      <td className="p-2 text-slate-600 border-r border-slate-200 max-w-[150px] truncate" title={contentDesc}>
+                      <td className="p-1.5 font-medium border-r border-slate-200 text-[9px] break-words">{item.address?.city || "—"}</td>
+                      <td className="p-1.5 text-slate-600 border-r border-slate-200 text-[8.5px] leading-tight break-words" title={contentDesc}>
                         {contentDesc}
                       </td>
-                      <td className="p-2 text-center border-r border-slate-200">{shipmentWeight(item).toFixed(2)}</td>
-                      <td className="p-2 text-right border-r border-slate-200">
+                      <td className="p-1.5 text-center border-r border-slate-200 text-[9px] whitespace-nowrap">{shipmentWeight(item).toFixed(2)}</td>
+                      <td className="p-1.5 text-right border-r border-slate-200 text-[9px] whitespace-nowrap">
                         {isCod ? (
                           <strong className="text-emerald-700 font-bold">{money(item.cod!)}</strong>
                         ) : (
                           <span className="text-slate-400">$0.00</span>
                         )}
                       </td>
-                      <td className="p-2 text-center">
-                        <div className="w-4 h-4 border border-slate-400 rounded mx-auto"></div>
+                      <td className="p-1.5 text-center">
+                        <div className="w-3.5 h-3.5 border border-slate-400 rounded mx-auto"></div>
                       </td>
                     </tr>
                   );
                 })}
               </tbody>
               <tfoot>
-                <tr className="bg-slate-100 font-bold border-t-2 border-slate-400 text-slate-900">
-                  <td colSpan={6} className="p-2.5 text-right border-r border-slate-300 uppercase text-[10px]">
+                <tr className="bg-slate-100 font-bold border-t-2 border-slate-400 text-slate-900 text-[9px]">
+                  <td colSpan={6} className="p-1.5 text-right border-r border-slate-300 uppercase">
                     Totales Generales ({totalShipments} guías)
                   </td>
-                  <td className="p-2.5 text-center border-r border-slate-300">{totalWeight.toFixed(2)} kg</td>
-                  <td className="p-2.5 text-right border-r border-slate-300 text-emerald-800 font-black">{money(totalCod)}</td>
+                  <td className="p-1.5 text-center border-r border-slate-300 whitespace-nowrap">{totalWeight.toFixed(2)} kg</td>
+                  <td className="p-1.5 text-right border-r border-slate-300 text-emerald-800 font-black whitespace-nowrap">{money(totalCod)}</td>
                   <td></td>
                 </tr>
               </tfoot>
             </table>
           </div>
 
-          <div className="p-3 bg-amber-50/50 border border-amber-200 rounded-lg text-[11px] text-amber-900 leading-snug">
+          <div className="p-2.5 bg-amber-50/50 border border-amber-200 rounded-lg text-[10px] text-amber-900 leading-snug">
             <strong>Declaración de Transferencia y Custodia:</strong> El transportista / courier autoriza la firma de este documento declarando recibir de conformidad los paquetes detallados en este manifiesto en buen estado, cerrados y rotulados. Ambas partes acuerdan que este registro físico constituye constancia irrevocable del retiro de la paquetería.
           </div>
 
-          <div className="grid grid-cols-2 gap-8 pt-4">
-            <div className="border border-slate-300 rounded-xl p-4 space-y-3 bg-slate-50/30">
-              <div className="border-b border-slate-200 pb-2">
-                <h4 className="font-black text-slate-900 text-xs uppercase tracking-wider">
+          <div className="manifest-signatures grid grid-cols-2 gap-6 pt-2">
+            <div className="border border-slate-300 rounded-xl p-3.5 space-y-2.5 bg-slate-50/30">
+              <div className="border-b border-slate-200 pb-1.5">
+                <h4 className="font-black text-slate-900 text-[11px] uppercase tracking-wider">
                   1. ENTREGADO POR (REMITENTE / TIENDA)
                 </h4>
-                <p className="text-[10px] text-slate-500">Firma del encargado que entrega la mercadería</p>
+                <p className="text-[9.5px] text-slate-500">Firma del encargado que entrega la mercadería</p>
               </div>
 
-              <div className="space-y-2 text-xs pt-1">
+              <div className="space-y-1.5 text-[10px] pt-0.5">
                 <div className="flex items-center gap-1 text-slate-700">
-                  <span className="w-28 text-slate-500 font-medium">Nombre Completo:</span>
+                  <span className="w-24 text-slate-500 font-medium">Nombre Completo:</span>
                   <span className="border-b border-slate-300 flex-1 font-semibold text-slate-900">{originName}</span>
                 </div>
                 <div className="flex items-center gap-1 text-slate-700">
-                  <span className="w-28 text-slate-500 font-medium">Cédula / RUC:</span>
+                  <span className="w-24 text-slate-500 font-medium">Cédula / RUC:</span>
                   <span className="border-b border-slate-300 flex-1">___________________________</span>
                 </div>
                 <div className="flex items-center gap-1 text-slate-700">
-                  <span className="w-28 text-slate-500 font-medium">Hora de Entrega:</span>
-                  <span className="border-b border-slate-300 flex-1">___________________________</span>
-                </div>
-              </div>
-
-              <div className="pt-8 text-center">
-                <div className="border-t border-slate-400 w-3/4 mx-auto pt-1 text-slate-700 text-xs font-bold">
-                  Firma del Cliente / Despachador
-                </div>
-              </div>
-            </div>
-
-            <div className="border border-slate-300 rounded-xl p-4 space-y-3 bg-slate-50/30">
-              <div className="border-b border-slate-200 pb-2">
-                <h4 className="font-black text-slate-900 text-xs uppercase tracking-wider text-red-600">
-                  2. RECIBIDO POR (TRANSPORTISTA / COURIER)
-                </h4>
-                <p className="text-[10px] text-slate-500">Firma del conductor o repartidor que retira</p>
-              </div>
-
-              <div className="space-y-2 text-xs pt-1">
-                <div className="flex items-center gap-1 text-slate-700">
-                  <span className="w-28 text-slate-500 font-medium">Transportadora:</span>
-                  <span className="border-b border-slate-300 flex-1 font-bold text-red-700">{carrierText}</span>
-                </div>
-                <div className="flex items-center gap-1 text-slate-700">
-                  <span className="w-28 text-slate-500 font-medium">Nombre Chofer:</span>
-                  <span className="border-b border-slate-300 flex-1">___________________________</span>
-                </div>
-                <div className="flex items-center gap-1 text-slate-700">
-                  <span className="w-28 text-slate-500 font-medium">Cédula / Placa:</span>
-                  <span className="border-b border-slate-300 flex-1">___________________________</span>
-                </div>
-                <div className="flex items-center gap-1 text-slate-700">
-                  <span className="w-28 text-slate-500 font-medium">Hora de Retiro:</span>
+                  <span className="w-24 text-slate-500 font-medium">Hora de Entrega:</span>
                   <span className="border-b border-slate-300 flex-1">___________________________</span>
                 </div>
               </div>
 
               <div className="pt-6 text-center">
-                <div className="border-t border-slate-400 w-3/4 mx-auto pt-1 text-slate-700 text-xs font-bold">
+                <div className="border-t border-slate-400 w-3/4 mx-auto pt-1 text-slate-700 text-[10px] font-bold">
+                  Firma del Cliente / Despachador
+                </div>
+              </div>
+            </div>
+
+            <div className="border border-slate-300 rounded-xl p-3.5 space-y-2.5 bg-slate-50/30">
+              <div className="border-b border-slate-200 pb-1.5">
+                <h4 className="font-black text-slate-900 text-[11px] uppercase tracking-wider text-red-600">
+                  2. RECIBIDO POR (TRANSPORTISTA / COURIER)
+                </h4>
+                <p className="text-[9.5px] text-slate-500">Firma del conductor o repartidor que retira</p>
+              </div>
+
+              <div className="space-y-1.5 text-[10px] pt-0.5">
+                <div className="flex items-center gap-1 text-slate-700">
+                  <span className="w-24 text-slate-500 font-medium">Transportadora:</span>
+                  <span className="border-b border-slate-300 flex-1 font-bold text-red-700">{carrierText}</span>
+                </div>
+                <div className="flex items-center gap-1 text-slate-700">
+                  <span className="w-24 text-slate-500 font-medium">Nombre Chofer:</span>
+                  <span className="border-b border-slate-300 flex-1">___________________________</span>
+                </div>
+                <div className="flex items-center gap-1 text-slate-700">
+                  <span className="w-24 text-slate-500 font-medium">Cédula / Placa:</span>
+                  <span className="border-b border-slate-300 flex-1">___________________________</span>
+                </div>
+                <div className="flex items-center gap-1 text-slate-700">
+                  <span className="w-24 text-slate-500 font-medium">Hora de Retiro:</span>
+                  <span className="border-b border-slate-300 flex-1">___________________________</span>
+                </div>
+              </div>
+
+              <div className="pt-4 text-center">
+                <div className="border-t border-slate-400 w-3/4 mx-auto pt-1 text-slate-700 text-[10px] font-bold">
                   Firma y Sello del Transportista
                 </div>
               </div>

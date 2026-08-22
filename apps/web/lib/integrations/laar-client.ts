@@ -7,6 +7,7 @@
  */
 
 import { getPrisma } from "../prisma";
+import { generateNextTrackingNumber } from "../tracking-number";
 
 let cachedToken: { token: string; expiresAt: number } | null = null;
 
@@ -147,7 +148,7 @@ export async function createLaarShipment(
   const originCityCode = await resolveLaarCityCode(input.origin.city);
   const destCityCode = await resolveLaarCityCode(input.destination.city);
 
-  const uniqueGuiaRef = input.reference || `TRJ${Date.now()}`;
+  const uniqueGuiaRef = input.reference || (await generateNextTrackingNumber());
 
   const payload = {
     origen: {
@@ -186,7 +187,7 @@ export async function createLaarShipment(
     costoflete: 0,
     costoproducto: isCod ? codAmount : 0,
     tipocobro: isCod ? 1 : 0,
-    comentario: input.origin.name ? `Origen: ${input.origin.name} - ${input.origin.line1}` : "Despacho Trajetix ERP",
+    comentario: input.destination.reference || "",
     fechaPedido: "",
     retorno: {
       tipoServicio: "",

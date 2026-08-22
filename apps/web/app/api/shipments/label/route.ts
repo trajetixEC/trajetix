@@ -51,6 +51,9 @@ function patchLaarPdfOrigin(
             );
           }
 
+          // Strip redundant "Origen: Quality Shop..." printed above destination city
+          decompressed = decompressed.replace(/\(Origen:\s*[^)]+\)Tj/gi, "()Tj");
+
           const recompressed = zlib.deflateSync(Buffer.from(decompressed, "latin1")).toString("latin1");
           return `stream\r\n${recompressed}\r\nendstream`;
         }

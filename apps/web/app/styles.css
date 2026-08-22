@@ -1626,36 +1626,58 @@ td select {
   align-items: center;
   gap: 0.35rem;
   border-radius: 999px;
-  padding: 0.28rem 0.48rem;
-  background: #202020;
-  color: #aaa;
-  font-size: 0.56rem;
+  padding: 0.28rem 0.55rem;
+  background: #1f232b;
+  color: #94a3b8;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  font-size: 0.58rem;
+  font-weight: 750;
+  white-space: nowrap;
 }
 .status i {
   width: 5px;
   height: 5px;
   border-radius: 50%;
   background: currentColor;
+  display: inline-block;
+  flex-shrink: 0;
 }
 .status-entregado,
-.status-disponible {
-  color: #56d18b;
-  background: #10271b;
+.status-disponible,
+.status-delivered {
+  color: #34d399;
+  background: rgba(16, 185, 129, 0.14);
+  border: 1px solid rgba(52, 211, 153, 0.25);
 }
 .status-enviado,
-.status-en-transito {
-  color: #72a0ff;
-  background: #121d32;
+.status-en-transito,
+.status-in-transit,
+.status-out-for-delivery,
+.status-pickup-scheduled,
+.status-recoleccion {
+  color: #60a5fa;
+  background: rgba(59, 130, 246, 0.14);
+  border: 1px solid rgba(96, 165, 250, 0.25);
 }
-.status-preparando {
-  color: #dc9d49;
-  background: #2c2111;
+.status-preparando,
+.status-label-created,
+.status-quoted,
+.status-draft,
+.status-borrador {
+  color: #fbbf24;
+  background: rgba(245, 158, 11, 0.14);
+  border: 1px solid rgba(251, 191, 36, 0.25);
 }
 .status-pendiente,
 .status-por-despachar,
-.status-stock-bajo {
-  color: #ff656a;
-  background: #321416;
+.status-stock-bajo,
+.status-exception,
+.status-cancelled,
+.status-returned,
+.status-novedad {
+  color: #f87171;
+  background: rgba(239, 68, 68, 0.14);
+  border: 1px solid rgba(248, 113, 113, 0.25);
 }
 .chart-panel {
   padding-bottom: 1rem;
@@ -3667,7 +3689,6 @@ html[data-theme="light"] th {
   color: #667080;
 }
 html[data-theme="light"] td,
-html[data-theme="light"] .recent-shipments .status,
 html[data-theme="light"] .carrier-bars span {
   color: #364152;
 }
@@ -5392,44 +5413,61 @@ html[data-theme="light"] .user {
 .guide-status {
   display: inline-flex;
   align-items: center;
+  gap: 0.35rem;
   border-radius: 999px;
-  padding: 0.3rem 0.5rem;
-  font-size: 0.54rem;
+  padding: 0.3rem 0.6rem;
+  font-size: 0.58rem;
   font-weight: 750;
   white-space: nowrap;
 }
+.shipment-status i {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
+}
 .shipment-status {
-  background: #211d1d;
-  color: #b9b3b1;
+  background: #1f232b;
+  color: #94a3b8;
+  border: 1px solid rgba(148, 163, 184, 0.2);
 }
 .shipment-status-delivered {
-  background: #10281b;
-  color: #5bd392;
+  background: rgba(16, 185, 129, 0.14);
+  color: #34d399;
+  border: 1px solid rgba(52, 211, 153, 0.25);
 }
 .shipment-status-in-transit,
 .shipment-status-out-for-delivery,
 .shipment-status-pickup-scheduled {
-  background: #121e34;
-  color: #79a7ff;
+  background: rgba(59, 130, 246, 0.14);
+  color: #60a5fa;
+  border: 1px solid rgba(96, 165, 250, 0.25);
 }
 .shipment-status-exception,
 .shipment-status-cancelled,
 .shipment-status-returned {
-  background: #321416;
-  color: #ff7277;
+  background: rgba(239, 68, 68, 0.14);
+  color: #f87171;
+  border: 1px solid rgba(248, 113, 113, 0.25);
 }
 .shipment-status-label-created,
-.shipment-status-quoted {
-  background: #30250f;
-  color: #e2ac4e;
+.shipment-status-quoted,
+.shipment-status-draft {
+  background: rgba(245, 158, 11, 0.14);
+  color: #fbbf24;
+  border: 1px solid rgba(251, 191, 36, 0.25);
 }
 .guide-status.generated {
-  background: #13233a;
-  color: #78aaff;
+  background: rgba(59, 130, 246, 0.14);
+  color: #60a5fa;
+  border: 1px solid rgba(96, 165, 250, 0.25);
 }
 .guide-status.pending {
-  background: #2b2020;
-  color: #c58d8f;
+  background: rgba(239, 68, 68, 0.14);
+  color: #f87171;
+  border: 1px solid rgba(248, 113, 113, 0.25);
 }
 .shipment-row-actions {
   display: flex;
@@ -5522,38 +5560,73 @@ html[data-theme="light"] .shipment-filter-footer {
 html[data-theme="light"] .shipment-guide {
   color: #a91f28;
 }
-html[data-theme="light"] .shipment-status {
-  background: #eef1f5;
-  color: #455164;
+html[data-theme="light"] .shipment-status,
+html[data-theme="light"] .status {
+  background: #f1f5f9;
+  color: #475569;
+  border: 1px solid #cbd5e1;
 }
-html[data-theme="light"] .shipment-status-delivered {
-  background: #e1f6e9;
-  color: #137d43;
+html[data-theme="light"] .shipment-status-delivered,
+html[data-theme="light"] .status-delivered,
+html[data-theme="light"] .status-entregado,
+html[data-theme="light"] .status-disponible {
+  background: #dcfce7;
+  color: #15803d;
+  border: 1px solid #86efac;
 }
 html[data-theme="light"] .shipment-status-in-transit,
 html[data-theme="light"] .shipment-status-out-for-delivery,
-html[data-theme="light"] .shipment-status-pickup-scheduled {
-  background: #e7efff;
-  color: #245fbd;
+html[data-theme="light"] .shipment-status-pickup-scheduled,
+html[data-theme="light"] .status-in-transit,
+html[data-theme="light"] .status-out-for-delivery,
+html[data-theme="light"] .status-pickup-scheduled,
+html[data-theme="light"] .status-en-transito,
+html[data-theme="light"] .status-enviado,
+html[data-theme="light"] .status-recoleccion {
+  background: #dbeafe;
+  color: #1d4ed8;
+  border: 1px solid #93c5fd;
 }
 html[data-theme="light"] .shipment-status-exception,
 html[data-theme="light"] .shipment-status-cancelled,
-html[data-theme="light"] .shipment-status-returned {
-  background: #fee8e9;
-  color: #b72830;
+html[data-theme="light"] .shipment-status-returned,
+html[data-theme="light"] .status-exception,
+html[data-theme="light"] .status-cancelled,
+html[data-theme="light"] .status-returned,
+html[data-theme="light"] .status-novedad,
+html[data-theme="light"] .status-stock-bajo,
+html[data-theme="light"] .status-pendiente,
+html[data-theme="light"] .status-por-despachar {
+  background: #fee2e2;
+  color: #b91c1c;
+  border: 1px solid #fca5a5;
 }
 html[data-theme="light"] .shipment-status-label-created,
-html[data-theme="light"] .shipment-status-quoted {
-  background: #fff3d6;
-  color: #956111;
+html[data-theme="light"] .shipment-status-quoted,
+html[data-theme="light"] .shipment-status-draft,
+html[data-theme="light"] .status-label-created,
+html[data-theme="light"] .status-quoted,
+html[data-theme="light"] .status-draft,
+html[data-theme="light"] .status-preparando,
+html[data-theme="light"] .status-borrador {
+  background: #fef3c7;
+  color: #b45309;
+  border: 1px solid #fde047;
 }
 html[data-theme="light"] .guide-status.generated {
-  background: #e7efff;
-  color: #245fbd;
+  background: #dbeafe;
+  color: #1d4ed8;
+  border: 1px solid #93c5fd;
 }
 html[data-theme="light"] .guide-status.pending {
-  background: #f4e9e9;
-  color: #8c4246;
+  background: #fee2e2;
+  color: #b91c1c;
+  border: 1px solid #fca5a5;
+}
+html[data-theme="light"] .shipment-management-table td > em.cod-badge {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fde047;
 }
 html[data-theme="light"] .shipment-row-actions button,
 html[data-theme="light"] .shipment-row-actions a {

@@ -1213,7 +1213,9 @@ function Overview({
                       <small>{item.service}</small>
                     </td>
                     <td>
-                      <span className="status">
+                      <span
+                        className={`shipment-status shipment-status-${(item.status || "").toLowerCase().replaceAll("_", "-")}`}
+                      >
                         <i />
                         {statusLabels[item.status] ?? item.status}
                       </span>
