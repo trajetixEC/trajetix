@@ -101,6 +101,7 @@ export async function GET() {
         amount: Number(item.amountMinor) / 100,
         status: item.status,
         note: item.note,
+        receiptUrl: item.receiptUrl,
         createdAt: item.createdAt,
         bankName: item.bankAccount?.bankName || "Banco",
         accountLast4: item.bankAccount?.accountLast4 || "****",

@@ -36,6 +36,24 @@ type RechargeItem = {
   approvedBy?: string | null;
 };
 
+type AdminWithdrawalItem = {
+  id: string;
+  tenantId: string;
+  tenantName: string;
+  requestedBy: string;
+  requestedByEmail?: string;
+  amount: number;
+  bankName: string;
+  accountType: string;
+  accountLast4: string;
+  holderName: string;
+  holderId: string;
+  receiptUrl?: string | null;
+  status: string;
+  note?: string | null;
+  createdAt: string;
+};
+
 type FinanceData = {
   wallet: { balance: number; currency: string };
   transactions: Array<{
@@ -60,6 +78,8 @@ type FinanceData = {
     createdAt: string;
     bankName: string;
     accountLast4: string;
+    receiptUrl?: string | null;
+    note?: string | null;
   }>;
   recharges?: RechargeItem[];
 };
@@ -76,10 +96,11 @@ const money = new Intl.NumberFormat("es-EC", {
 });
 
 export function FinanceModule() {
-  const [tab, setTab] = useState<"wallet" | "recharges" | "banks" | "withdrawals" | "admin-recharges">("wallet");
+  const [tab, setTab] = useState<"wallet" | "recharges" | "banks" | "withdrawals" | "admin-recharges" | "admin-withdrawals">("wallet");
   const [data, setData] = useState(emptyFinance);
   const [recharges, setRecharges] = useState<RechargeItem[]>([]);
   const [adminRecharges, setAdminRecharges] = useState<RechargeItem[]>([]);
+  const [adminWithdrawals, setAdminWithdrawals] = useState<AdminWithdrawalItem[]>([]);
   const [isAdmin, setIsAdmin] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -92,6 +113,15 @@ export function FinanceModule() {
   const [loadingRecharge, setLoadingRecharge] = useState(false);
   const [selectedReceiptModal, setSelectedReceiptModal] = useState<string | null>(null);
   const [processingActionId, setProcessingActionId] = useState<string | null>(null);
+
+  const [rejectModalWithdrawal, setRejectModalWithdrawal] = useState<AdminWithdrawalItem | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
+  const [approveModalWithdrawal, setApproveModalWithdrawal] = useState<AdminWithdrawalItem | null>(null);
+  const [approveReceiptUrl, setApproveReceiptUrl] = useState("");
+  const [approveNote, setApproveNote] = useState("");
+  const [uploadingApproveReceipt, setUploadingApproveReceipt] = useState(false);
+  const [processingWithdrawalId, setProcessingWithdrawalId] = useState<string | null>(null);
+
   async function load() {
     const response = await fetch("/api/finance/overview");
     if (response.ok) {
@@ -130,19 +160,42 @@ export function FinanceModule() {
     }
   }
 
+  async function loadAdminWithdrawals() {
+    try {
+      const res = await fetch("/api/admin/withdrawals");
+      if (res.ok) {
+        const body = await res.json();
+        if (Array.isArray(body.withdrawals)) {
+          setAdminWithdrawals(body.withdrawals);
+          setIsAdmin(true);
+        }
+      }
+    } catch (err) {
+      console.error("Error al cargar retiros administrativos:", err);
+    }
+  }
+
   useEffect(() => {
     void load();
     void loadRecharges();
     void loadAdminRecharges();
+    void loadAdminWithdrawals();
 
     const interval = setInterval(() => {
       void load();
       void loadRecharges();
       void loadAdminRecharges();
+      void loadAdminWithdrawals();
     }, 10000);
 
     return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    if (isAdmin && (tab === "wallet" || tab === "recharges" || tab === "banks" || tab === "withdrawals")) {
+      setTab("admin-withdrawals");
+    }
+  }, [isAdmin, tab]);
 
   async function handleReceiptChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -221,6 +274,56 @@ export function FinanceModule() {
       setProcessingActionId(null);
     }
   }
+
+  async function handleAdminWithdrawalAction(
+    withdrawalId: string,
+    action: "APPROVE" | "REJECT",
+    note?: string,
+    receiptUrl?: string
+  ) {
+    setProcessingWithdrawalId(withdrawalId);
+    try {
+      const res = await fetch("/api/admin/withdrawals/action", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ withdrawalId, action, note, receiptUrl }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || "Error al procesar la solicitud de retiro");
+      setMessage(body.message);
+      setRejectModalWithdrawal(null);
+      setRejectReason("");
+      setApproveModalWithdrawal(null);
+      setApproveReceiptUrl("");
+      setApproveNote("");
+      await loadAdminWithdrawals();
+      await load();
+      window.dispatchEvent(new Event("wallet:updated"));
+    } catch (err: unknown) {
+      setMessage(err instanceof Error ? err.message : "Error al procesar la solicitud de retiro");
+    } finally {
+      setProcessingWithdrawalId(null);
+    }
+  }
+
+  async function handleApproveReceiptChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingApproveReceipt(true);
+    try {
+      const processed = await processImageToWebP(file, {
+        maxWidth: 1600,
+        maxHeight: 1600,
+        quality: 0.75,
+        maxSizeBytes: 2 * 1024 * 1024,
+      });
+      setApproveReceiptUrl(processed.dataUrl);
+    } catch (err: unknown) {
+      setMessage(err instanceof Error ? err.message : "Error al procesar comprobante.");
+    } finally {
+      setUploadingApproveReceipt(false);
+    }
+  }
   async function addBank(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const formElement = event.currentTarget;
@@ -289,38 +392,50 @@ export function FinanceModule() {
         </div>
       </div>
       <div className="finance-tabs">
-        <button
-          className={tab === "wallet" ? "active" : ""}
-          onClick={() => setTab("wallet")}
-        >
-          Billetera
-        </button>
-        <button
-          className={tab === "recharges" ? "active" : ""}
-          onClick={() => setTab("recharges")}
-        >
-          Recargas
-        </button>
-        <button
-          className={tab === "banks" ? "active" : ""}
-          onClick={() => setTab("banks")}
-        >
-          Cuentas bancarias
-        </button>
-        <button
-          className={tab === "withdrawals" ? "active" : ""}
-          onClick={() => setTab("withdrawals")}
-        >
-          Retiros
-        </button>
-        {isAdmin && (
-          <button
-            className={tab === "admin-recharges" ? "active" : ""}
-            onClick={() => setTab("admin-recharges")}
-            style={{ color: "var(--amber-500, #f59e0b)", fontWeight: "bold" }}
-          >
-            🛡️ Revisar Recargas (Admin)
-          </button>
+        {!isAdmin ? (
+          <>
+            <button
+              className={tab === "wallet" ? "active" : ""}
+              onClick={() => setTab("wallet")}
+            >
+              Billetera
+            </button>
+            <button
+              className={tab === "recharges" ? "active" : ""}
+              onClick={() => setTab("recharges")}
+            >
+              Recargas
+            </button>
+            <button
+              className={tab === "banks" ? "active" : ""}
+              onClick={() => setTab("banks")}
+            >
+              Cuentas bancarias
+            </button>
+            <button
+              className={tab === "withdrawals" ? "active" : ""}
+              onClick={() => setTab("withdrawals")}
+            >
+              Retiros
+            </button>
+          </>
+        ) : (
+          <>
+            <button
+              className={tab === "admin-withdrawals" ? "active" : ""}
+              onClick={() => setTab("admin-withdrawals")}
+              style={{ color: "var(--amber-500, #f59e0b)", fontWeight: "bold" }}
+            >
+              🛡️ Solicitudes Retiros
+            </button>
+            <button
+              className={tab === "admin-recharges" ? "active" : ""}
+              onClick={() => setTab("admin-recharges")}
+              style={{ color: "var(--amber-500, #f59e0b)", fontWeight: "bold" }}
+            >
+              🛡️ Revisar Recargas
+            </button>
+          </>
         )}
       </div>
       {message && (
@@ -506,16 +621,40 @@ export function FinanceModule() {
           <section className="panel bank-list">
             <h2>Solicitudes</h2>
             {data.withdrawals.map((item) => (
-              <article key={item.id}>
-                <span>⇩</span>
-                <div>
-                  <b>{money.format(item.amount)}</b>
-                  <small>
+              <article key={item.id} className="flex items-center justify-between p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-950/60 gap-3 mb-2">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap mb-1">
+                    <b className="text-slate-900 dark:text-white font-mono font-bold text-sm">{money.format(item.amount)}</b>
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${
+                      item.status === "PAID" || item.status === "APPROVED"
+                        ? "bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-800"
+                        : item.status === "REJECTED"
+                        ? "bg-red-100 dark:bg-red-950 text-red-700 dark:text-red-400 border border-red-300 dark:border-red-800"
+                        : "bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-400 border border-amber-300 dark:border-amber-800"
+                    }`}>
+                      {item.status === "PAID" || item.status === "APPROVED" ? "Aprobado / Pagado" : item.status === "REJECTED" ? "Rechazado" : "Pendiente"}
+                    </span>
+                  </div>
+                  <small className="text-slate-600 dark:text-slate-400 block text-xs">
                     {item.bankName} · •••• {item.accountLast4}
                   </small>
-                  <em>{new Date(item.createdAt).toLocaleString("es-EC")}</em>
+                  <em className="text-[11px] text-slate-400 dark:text-slate-500 not-italic block mt-0.5">{new Date(item.createdAt).toLocaleString("es-EC")}</em>
+                  {item.note && (
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 italic">
+                      Nota: {item.note}
+                    </p>
+                  )}
                 </div>
-                <i>{item.status}</i>
+                {item.receiptUrl && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedReceiptModal(item.receiptUrl!)}
+                    className="px-3 py-1.5 bg-white hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-semibold shadow-xs transition-colors shrink-0 flex items-center gap-1.5"
+                    title="Ver comprobante de transferencia"
+                  >
+                    <Eye className="w-3.5 h-3.5 text-amber-500" /> Ver Comprobante
+                  </button>
+                )}
               </article>
             ))}
             {data.withdrawals.length === 0 && (
@@ -837,6 +976,126 @@ export function FinanceModule() {
         </section>
       )}
 
+      {tab === "admin-withdrawals" && isAdmin && (
+        <section className="panel table-panel">
+          <div className="panel-title flex items-center justify-between">
+            <div>
+              <h2>Revisión de Solicitudes de Retiro (SuperAdmin)</h2>
+              <p>Revisa las solicitudes de retiro de fondos efectuadas por tiendas y usuarios, verifica los datos bancarios y aprueba o rechaza con motivo.</p>
+            </div>
+            <button
+              onClick={loadAdminWithdrawals}
+              className="secondary-button flex items-center gap-1.5 text-xs"
+            >
+              <RefreshCw className="w-3.5 h-3.5" /> Actualizar
+            </button>
+          </div>
+
+          <div className="table-scroll overflow-x-auto">
+            <table>
+              <thead>
+                <tr>
+                  <th>Tienda / Usuario Solicitante</th>
+                  <th>Monto Solicitado</th>
+                  <th>Cuenta Destino (Banco)</th>
+                  <th>Titular & Identificación</th>
+                  <th>Fecha Solicitud</th>
+                  <th>Estado</th>
+                  <th className="text-right">Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {adminWithdrawals.map((item) => (
+                  <tr key={item.id}>
+                    <td>
+                      <strong className="block text-slate-100 text-xs font-bold">{item.tenantName}</strong>
+                      <span className="text-[11px] text-slate-400 font-mono">{item.requestedBy}</span>
+                    </td>
+                    <td>
+                      <strong className="text-emerald-400 font-mono text-sm font-extrabold">{money.format(item.amount)}</strong>
+                      <span className="block text-[10px] text-slate-400">+ $0.50 comisión</span>
+                    </td>
+                    <td>
+                      <span className="block text-xs font-semibold">{item.bankName} ({item.accountType})</span>
+                      <span className="font-mono text-[11px] text-slate-400">•••• {item.accountLast4}</span>
+                    </td>
+                    <td>
+                      <span className="block text-xs font-semibold">{item.holderName}</span>
+                      <span className="font-mono text-[11px] text-slate-400">ID: {item.holderId}</span>
+                    </td>
+                    <td className="text-xs text-slate-400">
+                      {new Date(item.createdAt).toLocaleString("es-EC")}
+                    </td>
+                    <td>
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${
+                        item.status === "PAID" || item.status === "APPROVED"
+                          ? "bg-emerald-950 text-emerald-400 border border-emerald-800"
+                          : item.status === "REJECTED"
+                          ? "bg-red-950 text-red-400 border border-red-800"
+                          : "bg-amber-950 text-amber-400 border border-amber-800"
+                      }`}>
+                        {item.status === "PAID" || item.status === "APPROVED" ? "Aprobado / Pagado" : item.status === "REJECTED" ? "Rechazado" : "Pendiente"}
+                      </span>
+                      {item.note && (
+                        <span className="block text-[10px] text-slate-400 mt-0.5 max-w-[160px] truncate" title={item.note}>
+                          {item.note}
+                        </span>
+                      )}
+                    </td>
+                    <td className="text-right">
+                      {item.status === "PENDING" ? (
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setApproveModalWithdrawal(item);
+                              setApproveReceiptUrl(item.receiptUrl || "");
+                              setApproveNote("");
+                            }}
+                            disabled={processingWithdrawalId === item.id}
+                            className="primary-button bg-emerald-600 hover:bg-emerald-700 text-white text-xs py-1 px-2.5 flex items-center gap-1"
+                          >
+                            {processingWithdrawalId === item.id ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            ) : (
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                            )}
+                            Aprobar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setRejectModalWithdrawal(item);
+                              setRejectReason("");
+                            }}
+                            disabled={processingWithdrawalId === item.id}
+                            className="secondary-button border-red-800 text-red-400 hover:bg-red-950 text-xs py-1 px-2.5 flex items-center gap-1"
+                          >
+                            {processingWithdrawalId === item.id ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            ) : (
+                              <XCircle className="w-3.5 h-3.5" />
+                            )}
+                            Rechazar
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-slate-500">Procesado</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {adminWithdrawals.length === 0 && (
+              <div className="empty p-6 text-center text-xs text-slate-400">
+                No hay solicitudes de retiro registradas.
+              </div>
+            )}
+          </div>
+        </section>
+      )}
+
       {selectedReceiptModal && (
         <div className="modal-backdrop" onMouseDown={() => setSelectedReceiptModal(null)}>
           <div className="modal max-w-xl w-full p-4" onMouseDown={(e) => e.stopPropagation()}>
@@ -848,6 +1107,157 @@ export function FinanceModule() {
             </div>
             <div className="bg-slate-950 p-2 rounded-lg border border-slate-800 text-center max-h-[70vh] overflow-y-auto">
               <img src={selectedReceiptModal} alt="Comprobante de pago" className="w-full h-auto max-h-[60vh] object-contain rounded" />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {rejectModalWithdrawal && (
+        <div className="modal-backdrop" onMouseDown={() => setRejectModalWithdrawal(null)}>
+          <div className="modal max-w-md w-full p-5" onMouseDown={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4 border-b border-slate-800 pb-3">
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                <XCircle className="w-4 h-4 text-red-500" /> Rechazar Solicitud de Retiro
+              </h3>
+              <button className="modal-close" onClick={() => setRejectModalWithdrawal(null)}>×</button>
+            </div>
+
+            <div className="space-y-4">
+              <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 text-xs space-y-1">
+                <p><span className="text-slate-400">Tienda:</span> <strong className="text-white">{rejectModalWithdrawal.tenantName}</strong></p>
+                <p><span className="text-slate-400">Solicitado por:</span> <strong className="text-white">{rejectModalWithdrawal.requestedBy}</strong></p>
+                <p><span className="text-slate-400">Monto:</span> <strong className="text-emerald-400 font-mono">{money.format(rejectModalWithdrawal.amount)}</strong></p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                  Motivo de Rechazo * (Obligatorio)
+                </label>
+                <textarea
+                  value={rejectReason}
+                  onChange={(e) => setRejectReason(e.target.value)}
+                  placeholder="Ej. Datos bancarios o titular no coinciden con la información registrada / Cuenta bancaria bloqueada..."
+                  rows={3}
+                  className="w-full p-3 text-xs bg-slate-950 border border-slate-800 rounded-xl text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-red-500/20"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setRejectModalWithdrawal(null)}
+                  className="secondary-button text-xs py-2 px-4"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  disabled={!rejectReason.trim() || processingWithdrawalId === rejectModalWithdrawal.id}
+                  onClick={() => handleAdminWithdrawalAction(rejectModalWithdrawal.id, "REJECT", rejectReason)}
+                  className="primary-button bg-red-600 hover:bg-red-700 text-white text-xs py-2 px-4 flex items-center gap-1.5 font-bold"
+                >
+                  {processingWithdrawalId === rejectModalWithdrawal.id ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Procesando...
+                    </>
+                  ) : (
+                    <>
+                      <XCircle className="w-4 h-4" />
+                      Confirmar Rechazo
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {approveModalWithdrawal && (
+        <div className="modal-backdrop" onMouseDown={() => setApproveModalWithdrawal(null)}>
+          <div className="modal max-w-lg w-full p-5" onMouseDown={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4 border-b border-slate-800 pb-3">
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-500" /> Aprobar y Transferir Retiro
+              </h3>
+              <button className="modal-close" onClick={() => setApproveModalWithdrawal(null)}>×</button>
+            </div>
+
+            <div className="space-y-4">
+              <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 text-xs space-y-1 font-mono">
+                <p><span className="text-slate-400 font-sans">Tienda:</span> <strong className="text-white font-sans">{approveModalWithdrawal.tenantName}</strong></p>
+                <p><span className="text-slate-400 font-sans">Solicitante:</span> <strong className="text-white font-sans">{approveModalWithdrawal.requestedBy}</strong> ({approveModalWithdrawal.requestedByEmail})</p>
+                <p><span className="text-slate-400 font-sans">Monto a Transferir:</span> <strong className="text-emerald-400 font-bold">{money.format(approveModalWithdrawal.amount)}</strong></p>
+                <p><span className="text-slate-400 font-sans">Banco Destino:</span> {approveModalWithdrawal.bankName} ({approveModalWithdrawal.accountType})</p>
+                <p><span className="text-slate-400 font-sans">Número Cuenta:</span> •••• {approveModalWithdrawal.accountLast4}</p>
+                <p><span className="text-slate-400 font-sans">Titular:</span> {approveModalWithdrawal.holderName} (C.I./RUC: {approveModalWithdrawal.holderId})</p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                  Adjuntar Comprobante de Transferencia (Imagen WebP)
+                </label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleApproveReceiptChange}
+                  className="block w-full text-xs text-slate-400 file:mr-4 file:py-2 file:px-3 file:rounded-lg file:border file:border-slate-700 file:text-xs file:font-semibold file:bg-slate-800 hover:file:bg-slate-700 file:text-slate-200 cursor-pointer"
+                />
+                {uploadingApproveReceipt && (
+                  <div className="flex items-center gap-2 text-xs text-amber-500 mt-2">
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    Convertiendo comprobante a WebP...
+                  </div>
+                )}
+                {approveReceiptUrl && !uploadingApproveReceipt && (
+                  <div className="mt-2 p-2 bg-slate-950 rounded-lg border border-slate-800 text-center">
+                    <img src={approveReceiptUrl} alt="Comprobante transferencia" className="max-h-36 mx-auto rounded object-contain" />
+                    <span className="text-[10px] text-emerald-400 block mt-1">✓ Comprobante listo para adjuntar</span>
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                  Nota / Observación para el usuario (Opcional)
+                </label>
+                <input
+                  type="text"
+                  value={approveNote}
+                  onChange={(e) => setApproveNote(e.target.value)}
+                  placeholder="Ej. Transferencia realizada por Banco Guayaquil Ref: 849201"
+                  className="w-full p-2.5 text-xs bg-slate-950 border border-slate-800 rounded-xl text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setApproveModalWithdrawal(null)}
+                  className="secondary-button text-xs py-2 px-4"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  disabled={uploadingApproveReceipt || processingWithdrawalId === approveModalWithdrawal.id}
+                  onClick={() => handleAdminWithdrawalAction(approveModalWithdrawal.id, "APPROVE", approveNote, approveReceiptUrl)}
+                  className="primary-button bg-emerald-600 hover:bg-emerald-700 text-white text-xs py-2 px-4 flex items-center gap-1.5 font-bold"
+                >
+                  {processingWithdrawalId === approveModalWithdrawal.id ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Aprobando...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="w-4 h-4" />
+                      Confirmar Aprobar y Transferir
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </div>

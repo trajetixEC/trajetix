@@ -499,6 +499,7 @@ model Withdrawal {
   amountMinor   BigInt
   status        WithdrawalStatus @default(PENDING)
   note          String?          @db.VarChar(250)
+  receiptUrl    String?          @db.Text
   createdAt     DateTime         @default(now()) @db.Timestamptz(6)
   updatedAt     DateTime         @updatedAt @db.Timestamptz(6)
   tenant        Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)

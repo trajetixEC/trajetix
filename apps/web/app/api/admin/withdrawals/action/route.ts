@@ -9,6 +9,7 @@ const actionSchema = z.object({
   withdrawalId: z.string().uuid(),
   action: z.enum(["APPROVE", "REJECT"]),
   note: z.string().max(250).optional(),
+  receiptUrl: z.string().optional(),
 });
 
 export async function POST(request: Request) {
@@ -41,7 +42,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const { withdrawalId, action, note } = parsed.data;
+    const { withdrawalId, action, note, receiptUrl } = parsed.data;
     const prisma = getPrisma();
 
     // Fetch withdrawal
@@ -72,6 +73,7 @@ export async function POST(request: Request) {
           data: {
             status: WithdrawalStatus.PAID,
             note: note ? `Aprobado por ${user.email}: ${note}` : `Aprobado por ${user.email}`,
+            ...(receiptUrl ? { receiptUrl } : {}),
           },
         });
 
