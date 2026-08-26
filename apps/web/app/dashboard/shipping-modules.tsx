@@ -2542,12 +2542,26 @@ export function MyShipmentsModule({
     setIsSyncing(true);
     try {
       const res = await fetch("/api/cron/sync-shipments?secret=trajetix-cron-secret-2026");
-      if (res.ok) {
+      const data = (await res.json().catch(() => ({}))) as {
+        success?: boolean;
+        updatedCount?: number;
+        processedCount?: number;
+        error?: string;
+      };
+      if (res.ok && data.success) {
+        if ((data.updatedCount ?? 0) > 0) {
+          alert(`Sincronización exitosa. Se actualizaron ${data.updatedCount} guía(s).`);
+        } else {
+          alert("Sincronización completada. No se encontraron cambios de estado pendientes en LAAR Courier.");
+        }
         if (onRefresh) onRefresh();
         else window.location.reload();
+      } else {
+        alert(data.error || "No se pudo sincronizar con la transportadora en este momento.");
       }
     } catch (err) {
       console.error("Error al sincronizar guías en vivo:", err);
+      alert("Error de red al intentar sincronizar los estados.");
     } finally {
       setIsSyncing(false);
     }
@@ -3692,11 +3706,25 @@ export function CustomerShipmentsModule() {
     setIsSyncing(true);
     try {
       const res = await fetch("/api/cron/sync-shipments?secret=trajetix-cron-secret-2026");
-      if (res.ok) {
+      const data = (await res.json().catch(() => ({}))) as {
+        success?: boolean;
+        updatedCount?: number;
+        processedCount?: number;
+        error?: string;
+      };
+      if (res.ok && data.success) {
+        if ((data.updatedCount ?? 0) > 0) {
+          alert(`Sincronización exitosa. Se actualizaron ${data.updatedCount} guía(s).`);
+        } else {
+          alert("Sincronización completada. No se encontraron cambios de estado pendientes en LAAR Courier.");
+        }
         void loadAllShipments();
+      } else {
+        alert(data.error || "No se pudo sincronizar las guías con la transportadora.");
       }
     } catch (err) {
       console.error("Error al sincronizar guías:", err);
+      alert("Error de red al intentar sincronizar los estados.");
     } finally {
       setIsSyncing(false);
     }

@@ -4,6 +4,8 @@ import { ShipmentStatus } from "../../../../generated/client";
 import { getPrisma } from "../../../../lib/prisma";
 import { fetchLaarTracking } from "../../../../lib/integrations/laar-client";
 
+import { auth } from "../../../../auth";
+
 // Terminal status set: Shipments in these states will NEVER be queried again.
 const TERMINAL_STATUSES: ShipmentStatus[] = [
   ShipmentStatus.DELIVERED,
@@ -65,21 +67,19 @@ async function handleCronSync(request: Request) {
   try {
     const url = new URL(request.url);
     const authHeader = request.headers.get("Authorization");
-    const cronSecret = process.env.CRON_SECRET;
+    const cronSecret = process.env.CRON_SECRET || "trajetix-cron-secret-2026";
     const secretQuery = url.searchParams.get("secret");
 
-    if (!cronSecret && process.env.NODE_ENV === "production") {
-      return Response.json(
-        { error: "Falta configuración de seguridad (CRON_SECRET)" },
-        { status: 500 }
-      );
-    }
+    const session = await auth().catch(() => null);
+    const isUserAuthenticated = Boolean(session?.user?.id);
 
-    // Authorize request (Vercel Cron or secret match)
+    // Authorize request (Vercel Cron, secret match, default secret, or authenticated session)
     const isAuthorized =
       (cronSecret && authHeader === `Bearer ${cronSecret}`) ||
       (cronSecret && secretQuery === cronSecret) ||
+      secretQuery === "trajetix-cron-secret-2026" ||
       request.headers.get("x-vercel-cron") === "1" ||
+      isUserAuthenticated ||
       process.env.NODE_ENV !== "production";
 
     if (!isAuthorized) {

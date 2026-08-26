@@ -74,28 +74,46 @@ export async function getLaarAuthToken(): Promise<string> {
   const username = process.env.LAAR_API_USER || "plaza.toala.api";
   const password = process.env.LAAR_API_PASSWORD || "O4CO)nFX";
 
-  const response = await fetch("https://api.laarcourier.com:9747/api/Login/authenticate", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ username, password }),
-    cache: "no-store",
-  });
+  let lastError: unknown = null;
+  const maxAttempts = 3;
 
-  if (!response.ok) {
-    throw new Error(`Error al autenticar con LAAR Courier API (${response.status})`);
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const response = await fetch("https://api.laarcourier.com:9747/api/Login/authenticate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password }),
+        cache: "no-store",
+        signal: AbortSignal.timeout(8000),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Error al autenticar con LAAR Courier API (${response.status})`);
+      }
+
+      const data = (await response.json()) as { token?: string };
+      if (!data.token) {
+        throw new Error("LAAR Courier API no devolvió token de autenticación");
+      }
+
+      cachedToken = {
+        token: data.token,
+        expiresAt: Date.now() + 3600_000,
+      };
+
+      return data.token;
+    } catch (err) {
+      lastError = err;
+      console.warn(`Intento ${attempt}/${maxAttempts} para autenticar con LAAR falló:`, err instanceof Error ? err.message : err);
+      if (attempt < maxAttempts) {
+        await new Promise((res) => setTimeout(res, 1000 * attempt));
+      }
+    }
   }
 
-  const data = (await response.json()) as { token?: string };
-  if (!data.token) {
-    throw new Error("LAAR Courier API no devolvió token de autenticación");
-  }
-
-  cachedToken = {
-    token: data.token,
-    expiresAt: Date.now() + 3600_000,
-  };
-
-  return data.token;
+  throw new Error(
+    `Error al autenticar con LAAR Courier API tras ${maxAttempts} intentos: ${lastError instanceof Error ? lastError.message : String(lastError)}`
+  );
 }
 
 export type LaarShipmentInput = {
@@ -271,21 +289,27 @@ export async function createLaarShipment(
 }
 
 export async function fetchLaarTracking(guiaNumber: string) {
-  const token = await getLaarAuthToken();
+  try {
+    const token = await getLaarAuthToken();
 
-  const response = await fetch(`https://api.laarcourier.com:9746/guias/v4/${encodeURIComponent(guiaNumber)}`, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-    cache: "no-store",
-  });
+    const response = await fetch(`https://api.laarcourier.com:9746/guias/v4/${encodeURIComponent(guiaNumber)}`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      cache: "no-store",
+      signal: AbortSignal.timeout(18000),
+    });
 
-  if (!response.ok) {
+    if (!response.ok) {
+      return null;
+    }
+
+    const data = await response.json();
+    return data;
+  } catch (err) {
+    console.error(`Error al consultar tracking LAAR para ${guiaNumber}:`, err instanceof Error ? err.message : err);
     return null;
   }
-
-  const data = await response.json();
-  return data;
 }
 
 export async function cancelLaarShipment(guiaNumber: string) {
